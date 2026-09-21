@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Modo Claro - Estilo Apple/Tesla Minimalista */
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-2: #F1F5F9;
+  --border: #E2E8F0;
+  --text: #0F172A;
+  --muted: #64748B;
+  --accent: #7C3AED;  /* Morado refinado */
+  --warm: #E11D48;    /* Rojo carmesí elegante */
+  --danger: #DC2626;
+  --ok: #059669;
+}
+
+.dark {
+  /* Modo Oscuro Minimalista */
+  --bg: #0B0F17;
+  --surface: #131B26;
+  --surface-2: #1A2433;
+  --border: #243042;
+  --text: #F1F5F9;
+  --muted: #94A3B8;
+  --accent: #A855F7;  /* Morado luminoso */
+  --warm: #F43F5E;    /* Rojo vivo */
+  --danger: #EF4444;
+  --ok: #10B981;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  padding: 0;
+}
+
+/* Tipografía de lectura para la sección de teoría */
+.prose-theory {
+  font-family: "Source Serif 4", Georgia, serif;
+  max-width: 80ch;
+  line-height: 1.7;
+}
+
+/* Estilos para impresión de reportes */
+@media print {
+  body {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+}
