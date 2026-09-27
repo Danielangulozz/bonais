@@ -31,6 +31,12 @@ export function sweepFrequencyResponse({
   d,
   tau,
   speedOfSound,
+  gainFront = 1.0,
+  gainRear = 1.0,
+  polarityFront = 1,
+  polarityRear = -1,
+  delayFront = 0,
+  delayRear = tau,
   fMin = 20,
   fMax = 200,
   numPoints = 91,
@@ -44,21 +50,21 @@ export function sweepFrequencyResponse({
     const omega = calculateOmega(f);
     const k = calculateWavenumber(f, speedOfSound);
 
-    const ar = evaluateARObjective(d, tau, f, speedOfSound, rDistance);
+    const ar = evaluateARObjective(d, delayRear, f, speedOfSound, rDistance);
 
     const ff = calculateFarFieldAttenuation({
       d,
       k,
       omega,
-      gainFront: 1.0,
-      gainRear: 1.0,
-      polarityFront: 1,
-      polarityRear: -1,
-      delayFront: 0,
-      delayRear: tau,
+      gainFront,
+      gainRear,
+      polarityFront,
+      polarityRear,
+      delayFront,
+      delayRear,
     });
 
-    const gFront = calculateGFront(ff.frontMag, 2.0);
+    const gFront = calculateGFront(ff.frontMag, (gainFront + gainRear));
 
     data.push({
       frequency: Math.round(f * 10) / 10,
@@ -91,13 +97,19 @@ export function calculateCardioidPassband(d, speedOfSound) {
 
 /**
  * Genera datos de radiación polar para 360 grados a la frecuencia de interés,
- * normalizados a 0 dB en el eje frontal (+x).
+ * normalizados a 0 dB en la dirección del lóbulo principal.
  *
  * @param {Object} params
  * @param {number} params.frequency - [Hz]
  * @param {number} params.speedOfSound - [m/s]
  * @param {number} params.d - [m]
  * @param {number} params.tau - [s]
+ * @param {number} [params.gainFront=1.0]
+ * @param {number} [params.gainRear=1.0]
+ * @param {number} [params.polarityFront=1]
+ * @param {number} [params.polarityRear=-1]
+ * @param {number} [params.delayFront=0]
+ * @param {number} [params.delayRear]
  * @param {number} [params.stepDeg=2] - Paso angular en grados
  * @returns {Array<{
  *   angleDeg: number,
@@ -111,40 +123,20 @@ export function generatePolarRadiationPattern({
   speedOfSound,
   d,
   tau,
+  gainFront = 1.0,
+  gainRear = 1.0,
+  polarityFront = 1,
+  polarityRear = -1,
+  delayFront = 0,
+  delayRear = tau,
   stepDeg = 2,
 }) {
   const omega = calculateOmega(frequency);
   const k = calculateWavenumber(frequency, speedOfSound);
 
-  // Valores frontales para normalización
-  const cardFront = calculateFarFieldPressure(0, {
-    d,
-    k,
-    omega,
-    gainFront: 1.0,
-    gainRear: 1.0,
-    polarityFront: 1,
-    polarityRear: -1,
-    delayFront: 0,
-    delayRear: tau,
-  });
-
-  const inPhaseFront = calculateFarFieldPressure(0, {
-    d,
-    k,
-    omega,
-    gainFront: 1.0,
-    gainRear: 1.0,
-    polarityFront: 1,
-    polarityRear: 1,
-    delayFront: 0,
-    delayRear: 0,
-  });
-
-  const cardRefMag = Math.max(cardFront.mag, 1e-4);
-  const inPhaseRefMag = Math.max(inPhaseFront.mag, 1e-4);
-
-  const pattern = [];
+  const rawPoints = [];
+  let maxCardMag = 0;
+  let maxInPhaseMag = 0;
 
   for (let deg = 0; deg <= 360; deg += stepDeg) {
     const rad = (deg * Math.PI) / 180;
@@ -153,12 +145,12 @@ export function generatePolarRadiationPattern({
       d,
       k,
       omega,
-      gainFront: 1.0,
-      gainRear: 1.0,
-      polarityFront: 1,
-      polarityRear: -1,
-      delayFront: 0,
-      delayRear: tau,
+      gainFront,
+      gainRear,
+      polarityFront,
+      polarityRear,
+      delayFront,
+      delayRear,
     });
 
     const inPhaseP = calculateFarFieldPressure(rad, {
@@ -173,16 +165,24 @@ export function generatePolarRadiationPattern({
       delayRear: 0,
     });
 
-    const cardRatio = Math.max(cardP.mag / cardRefMag, 1e-4);
-    const inPhaseRatio = Math.max(inPhaseP.mag / inPhaseRefMag, 1e-4);
+    if (cardP.mag > maxCardMag) maxCardMag = cardP.mag;
+    if (inPhaseP.mag > maxInPhaseMag) maxInPhaseMag = inPhaseP.mag;
 
-    pattern.push({
+    rawPoints.push({
       angleDeg: deg,
       angleRad: rad,
-      cardioidDB: Math.max(20 * Math.log10(cardRatio), -40),
-      inPhaseDB: Math.max(20 * Math.log10(inPhaseRatio), -40),
+      cardMag: cardP.mag,
+      inPhaseMag: inPhaseP.mag,
     });
   }
 
-  return pattern;
+  const refCard = Math.max(maxCardMag, 1e-4);
+  const refInPhase = Math.max(maxInPhaseMag, 1e-4);
+
+  return rawPoints.map((pt) => ({
+    angleDeg: pt.angleDeg,
+    angleRad: pt.angleRad,
+    cardioidDB: Math.max(20 * Math.log10(Math.max(pt.cardMag / refCard, 1e-4)), -40),
+    inPhaseDB: Math.max(20 * Math.log10(Math.max(pt.inPhaseMag / refInPhase, 1e-4)), -40),
+  }));
 }

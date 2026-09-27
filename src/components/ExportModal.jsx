@@ -110,7 +110,14 @@ export default function ExportModal() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
       <div className="bg-surface border border-border rounded-xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden text-xs">
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5 bg-surface-2">
-          <h2 className="text-base font-bold text-text">Exportar Datos y Reporte</h2>
+          <div className="flex items-center gap-2">
+            <img
+              src="/logo-original.png"
+              alt="BONAIS"
+              className="h-5 w-5 rounded object-contain"
+            />
+            <h2 className="text-base font-bold text-text">Exportar Datos y Reporte</h2>
+          </div>
           <button
             type="button"
             onClick={() => dispatch({ type: 'SET_MODAL', payload: { modal: 'showExportModal', open: false } })}

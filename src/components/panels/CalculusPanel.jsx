@@ -93,6 +93,27 @@ export default function CalculusPanel() {
           </span>
         </div>
 
+        {/* Guía Pedagógica: ¿Para qué sirve este punto? */}
+        <div className="p-3 bg-purple/10 border border-purple/25 rounded-xl flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 font-bold text-purple-dark dark:text-purple-light text-xs">
+            <span>💡 ¿Qué es el Punto Personalizado y para qué sirve esta información?</span>
+          </div>
+          <p className="text-[11px] text-muted leading-relaxed">
+            Representa la ubicación exacta de un <strong className="text-text">micrófono de calibración</strong> o de un <strong className="text-text">oyente/músico</strong> en el recinto. Los cálculos analíticos evalúan la suma vectorial de las ondas sonoras en esa coordenada exacta:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1 pt-1 border-t border-purple/20 text-[10px]">
+            <div>
+              <strong className="text-text">Presión Compleja P:</strong> Suma de fasores con amplitud 1/r y fase e^(-jkr). Revela si hay interferencia constructiva o destructiva.
+            </div>
+            <div>
+              <strong className="text-text">Nivel L (dB SPL):</strong> Volumen efectivo en ese punto. Permite saber si el público recibe suficiente presión o si la tarima está silenciosa.
+            </div>
+            <div>
+              <strong className="text-text">Gradiente ∇L (dB/m):</strong> Tasa y dirección de cambio del volumen. Si caminas en la dirección marcada por la flecha, el volumen sube a esa tasa.
+            </div>
+          </div>
+        </div>
+
         {/* Tarjetas de valores evaluados */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {/* Presión y Fase */}

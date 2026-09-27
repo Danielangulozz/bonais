@@ -11,13 +11,14 @@ export default {
         bg: 'var(--bg)',
         surface: 'var(--surface)',
         'surface-2': 'var(--surface-2)',
+        'surface-solid': 'var(--surface-solid)',
         border: 'var(--border)',
         text: 'var(--text)',
         muted: 'var(--muted)',
         purple: {
-          light: '#F3E8FF',
-          DEFAULT: '#7C3AED',
-          dark: '#5B21B6',
+          light: '#D8B4FE',
+          DEFAULT: '#A855F7',
+          dark: '#7C3AED',
         },
         red: {
           light: '#FFE4E6',
@@ -39,7 +40,11 @@ export default {
         'base': '16px',
         'lg': '20px',
         'xl': '28px',
-      }
+      },
+      backdropBlur: {
+        'glass': '20px',
+        'glass-strong': '28px',
+      },
     },
   },
   plugins: [],

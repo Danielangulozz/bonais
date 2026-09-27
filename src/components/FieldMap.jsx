@@ -1,508 +1,632 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { useArray } from '../state/arrayState.js';
+import { useArrayState, useArrayDispatch, useArrayDerived } from '../state/arrayState.js';
 import { computeFieldGrid, calculatePointField } from '../core/field.js';
 import { getPaletteIndex, MAGMA_UINT32_TABLE } from '../render/colormap.js';
 import { generateContourSegments, drawContoursOnCanvas } from '../render/marchingSquares.js';
 import { calculateAnalyticalGradient } from '../core/calculus/gradient.js';
 import { findCriticalPoints } from '../core/calculus/criticalPoints.js';
 import { calculateInPhaseFirstMinimumAngle } from '../core/farField.js';
-import { Crosshair } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 const ISOVALUES_3DB = [];
 for (let val = -39; val <= 12; val += 3) {
   ISOVALUES_3DB.push(val);
 }
 
-export default function FieldMap() {
-  const { state, dispatch, derived } = useArray();
+export default React.memo(function FieldMap() {
+  const state = useArrayState();
+  const dispatch = useArrayDispatch();
+  const derived = useArrayDerived();
+
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const offscreenCanvasRef = useRef(null);
 
   const [hoverInfo, setHoverInfo] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [isSettled, setIsSettled] = useState(true);
+  const [canvasSize, setCanvasSize] = useState({ w: 600, h: 450 });
+  const [dragState, setDragState] = useState(null);
+
+  const lastHoverTimeRef = useRef(0);
 
   const mapSpan = state.mapSpan;
-  const xMin = -mapSpan;
-  const xMax = mapSpan;
-  const yMin = -mapSpan;
-  const yMax = mapSpan;
+  const panOffset = state.panOffset || { x: 0, y: 0 };
+  const isDark = state.theme === 'dark';
 
-  // Debounce para renderizado progresivo de alta resolución
+  // Strict 1:1 isotropic scale (dx === dy, NO stretching!)
+  const aspect = canvasSize.w / Math.max(canvasSize.h, 1);
+  let halfX, halfY;
+  if (aspect >= 1) {
+    halfY = mapSpan;
+    halfX = mapSpan * aspect;
+  } else {
+    halfX = mapSpan;
+    halfY = mapSpan / aspect;
+  }
+
+  const xMin = panOffset.x - halfX;
+  const xMax = panOffset.x + halfX;
+  const yMin = panOffset.y - halfY;
+  const yMax = panOffset.y + halfY;
+
+  // ResizeObserver with requestAnimationFrame throttling
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let rafId = null;
+    const observer = new ResizeObserver((entries) => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (width > 20 && height > 20) {
+            setCanvasSize({ w: Math.round(width), h: Math.round(height) });
+          }
+        }
+      });
+    });
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  // Debounce settled state: during interaction, use ultra-fast 60fps grid
   useEffect(() => {
     setIsSettled(false);
-    const timer = setTimeout(() => {
-      setIsSettled(true);
-    }, 120);
+    const timer = setTimeout(() => setIsSettled(true), 120);
     return () => clearTimeout(timer);
   }, [
-    state.frequency,
-    state.separation,
-    state.delayRear,
-    state.gainRearDB,
-    state.gainFrontDB,
-    state.polarityRear,
-    state.polarityFront,
-    state.temperature,
-    mapSpan,
+    state.frequency, state.separation, state.delayRear,
+    state.gainRearDB, state.gainFrontDB,
+    state.polarityRear, state.polarityFront,
+    state.temperature, mapSpan, panOffset.x, panOffset.y,
   ]);
 
-  // Puntos críticos: solo cuando el estado está en reposo para máximo rendimiento
   const criticalPoints = useMemo(() => {
     if (!state.layers.criticalPoints || !isSettled) return [];
     return findCriticalPoints({
       precomputedSources: derived.precomputedSources,
-      k: derived.k,
-      wavelength: derived.wavelength,
-      xMin,
-      xMax,
-      yMin,
-      yMax,
+      k: derived.k, wavelength: derived.wavelength,
+      xMin, xMax, yMin, yMax,
     });
   }, [state.layers.criticalPoints, isSettled, derived.precomputedSources, derived.k, derived.wavelength, xMin, xMax, yMin, yMax]);
 
-  // Primer mínimo lateral para subs en fase
   const asymptoticMin = useMemo(() => {
     if (state.preset !== 'in_phase') return null;
     return calculateInPhaseFirstMinimumAngle(state.separation, derived.wavelength);
   }, [state.preset, state.separation, derived.wavelength]);
 
-  // Conversión coordenadas físicas <-> canvas
   const worldToCanvas = useCallback(
-    (wx, wy, cWidth, cHeight) => {
-      const cx = ((wx - xMin) / (xMax - xMin)) * cWidth;
-      const cy = ((yMax - wy) / (yMax - yMin)) * cHeight;
-      return { cx, cy };
-    },
+    (wx, wy, cWidth, cHeight) => ({
+      cx: ((wx - xMin) / (xMax - xMin)) * cWidth,
+      cy: ((yMax - wy) / (yMax - yMin)) * cHeight,
+    }),
     [xMin, xMax, yMin, yMax]
   );
 
   const canvasToWorld = useCallback(
-    (cx, cy, cWidth, cHeight) => {
-      const wx = xMin + (cx / cWidth) * (xMax - xMin);
-      const wy = yMax - (cy / cHeight) * (yMax - yMin);
-      return { wx, wy };
-    },
+    (cx, cy, cWidth, cHeight) => ({
+      wx: xMin + (cx / cWidth) * (xMax - xMin),
+      wy: yMax - (cy / cHeight) * (yMax - yMin),
+    }),
     [xMin, xMax, yMin, yMax]
   );
 
-  // Renderizado optimizado a 60 FPS
+  // Wheel zoom
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 0.88 : 1.14;
+    const newSpan = Math.min(Math.max(mapSpan * zoomFactor, 2.5), 50.0);
+    dispatch({ type: 'SET_MAP_SPAN', payload: newSpan });
+  }, [mapSpan, dispatch]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+
+  // Main canvas render — highly optimized
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
+    if (canvas.width !== canvasSize.w) {
+      canvas.width = canvasSize.w;
+    }
+    if (canvas.height !== canvasSize.h) {
+      canvas.height = canvasSize.h;
+    }
 
-    // Resolución: 110x110 durante movimiento de sliders (instantáneo), 260x260 en reposo
-    const simRes = isSettled ? 260 : 110;
+    const ctx = canvas.getContext('2d');
+    const width = canvasSize.w;
+    const height = canvasSize.h;
+    if (width <= 0 || height <= 0) return;
+
+    const isContoursMode = state.viewMode === 'contours';
+
+    // PERFORMANCE OPTIMIZATION:
+    // When sliding / interacting: simBase = 60 (super fast 60 FPS!)
+    // When settled: simBase = 140 (crisp & instantaneous!)
+    const simBase = isSettled ? 140 : 60;
+    const simHeight = aspect >= 1 ? simBase : Math.round(simBase / aspect);
+    const simWidth = aspect >= 1 ? Math.round(simBase * aspect) : simBase;
+
     const { levelGrid } = computeFieldGrid({
       precomputedSources: derived.precomputedSources,
       k: derived.k,
-      xMin,
-      xMax,
-      yMin,
-      yMax,
-      width: simRes,
-      height: simRes,
+      xMin, xMax, yMin, yMax,
+      width: simWidth, height: simHeight,
     });
 
-    // Escritura directa en ImageData Uint32Array
-    const offscreen = document.createElement('canvas');
-    offscreen.width = simRes;
-    offscreen.height = simRes;
-    const offCtx = offscreen.getContext('2d');
-    const imgData = offCtx.createImageData(simRes, simRes);
-    const data32 = new Uint32Array(imgData.data.buffer);
+    if (isContoursMode) {
+      ctx.fillStyle = isDark ? '#090B14' : '#F8FAFC';
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      if (!offscreenCanvasRef.current) {
+        offscreenCanvasRef.current = document.createElement('canvas');
+      }
+      const offscreen = offscreenCanvasRef.current;
+      if (offscreen.width !== simWidth || offscreen.height !== simHeight) {
+        offscreen.width = simWidth;
+        offscreen.height = simHeight;
+      }
+      const offCtx = offscreen.getContext('2d');
+      const imgData = offCtx.createImageData(simWidth, simHeight);
+      const data32 = new Uint32Array(imgData.data.buffer);
 
-    for (let i = 0; i < simRes * simRes; i++) {
-      data32[i] = MAGMA_UINT32_TABLE[getPaletteIndex(levelGrid[i], -40, 12)];
+      const total = simWidth * simHeight;
+      for (let i = 0; i < total; i++) {
+        data32[i] = MAGMA_UINT32_TABLE[getPaletteIndex(levelGrid[i], -40, 12)];
+      }
+
+      offCtx.putImageData(imgData, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(offscreen, 0, 0, width, height);
     }
 
-    offCtx.putImageData(imgData, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(offscreen, 0, 0, width, height);
-
-    // Curvas de nivel: solo en reposo para fluidez total al mover sliders
-    if (state.layers.contours && isSettled) {
+    // Contours (only when settled or in contour mode)
+    if ((state.layers.contours || isContoursMode) && isSettled) {
       const contourMap = generateContourSegments({
-        levelGrid,
-        width: simRes,
-        height: simRes,
-        xMin,
-        xMax,
-        yMin,
-        yMax,
-        isovalues: ISOVALUES_3DB,
+        levelGrid, width: simWidth, height: simHeight,
+        xMin, xMax, yMin, yMax, isovalues: ISOVALUES_3DB,
       });
-
       drawContoursOnCanvas(
         ctx,
         contourMap,
         (wx, wy) => worldToCanvas(wx, wy, width, height),
-        'rgba(255, 255, 255, 0.22)'
+        isContoursMode
+          ? (isDark ? 'rgba(192, 132, 252, 0.5)' : 'rgba(124, 58, 237, 0.6)')
+          : 'rgba(255, 255, 255, 0.22)'
       );
     }
 
-    // Cuadrícula y ejes de coordenadas
     ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+
+    // Metric Grid
+    ctx.strokeStyle = isContoursMode
+      ? (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)')
+      : 'rgba(255, 255, 255, 0.06)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
+    ctx.setLineDash([2, 4]);
 
-    const stepM = mapSpan <= 15 ? 2 : 5;
-    for (let m = -Math.floor(mapSpan); m <= Math.floor(mapSpan); m += stepM) {
-      if (m === 0) continue;
+    const stepM = mapSpan <= 6 ? 1 : mapSpan <= 16 ? 2 : 5;
+    const startX = Math.floor(xMin / stepM) * stepM;
+    const endX = Math.ceil(xMax / stepM) * stepM;
+    for (let m = startX; m <= endX; m += stepM) {
+      if (Math.abs(m) < 1e-4) continue;
       const { cx: px } = worldToCanvas(m, 0, width, height);
-      ctx.beginPath();
-      ctx.moveTo(px, 0);
-      ctx.lineTo(px, height);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, height); ctx.stroke();
+    }
 
+    const startY = Math.floor(yMin / stepM) * stepM;
+    const endY = Math.ceil(yMax / stepM) * stepM;
+    for (let m = startY; m <= endY; m += stepM) {
+      if (Math.abs(m) < 1e-4) continue;
       const { cy: py } = worldToCanvas(0, m, width, height);
-      ctx.beginPath();
-      ctx.moveTo(0, py);
-      ctx.lineTo(width, py);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(width, py); ctx.stroke();
     }
     ctx.setLineDash([]);
 
-    // Ejes principales
+    // Axes (x=0, y=0)
     const { cx: origX, cy: origY } = worldToCanvas(0, 0, width, height);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.strokeStyle = isContoursMode
+      ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.25)')
+      : 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(0, origY);
-    ctx.lineTo(width, origY);
-    ctx.moveTo(origX, 0);
-    ctx.lineTo(origX, height);
+    ctx.moveTo(0, origY); ctx.lineTo(width, origY);
+    ctx.moveTo(origX, 0); ctx.lineTo(origX, height);
     ctx.stroke();
 
-    // Rótulos con acentos de color morado y rojo
-    ctx.fillStyle = '#A855F7'; // Morado luminoso
-    ctx.font = '600 11px "IBM Plex Sans JP", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('Público (+x) ►', width - 14, origY - 8);
-
-    ctx.fillStyle = '#F43F5E'; // Rojo carmesí
-    ctx.textAlign = 'left';
-    ctx.fillText('◄ Escenario (−x)', 14, origY - 8);
-
-    // Regiones Público (Morado) y Escenario (Rojo)
+    // Regions (Audience and Stage)
     if (state.layers.regions) {
-      // Público
-      const audTopLeft = worldToCanvas(state.audienceRegion.xMin, state.audienceRegion.yMax, width, height);
-      const audBottomRight = worldToCanvas(state.audienceRegion.xMax, state.audienceRegion.yMin, width, height);
-      ctx.fillStyle = 'rgba(168, 85, 247, 0.08)';
-      ctx.strokeStyle = '#A855F7';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(audTopLeft.cx, audTopLeft.cy, audBottomRight.cx - audTopLeft.cx, audBottomRight.cy - audTopLeft.cy);
-      ctx.strokeRect(audTopLeft.cx, audTopLeft.cy, audBottomRight.cx - audTopLeft.cx, audBottomRight.cy - audTopLeft.cy);
-      ctx.fillStyle = '#A855F7';
-      ctx.fillText('Público', audTopLeft.cx + 6, audTopLeft.cy + 14);
-
-      // Escenario
-      const stgTopLeft = worldToCanvas(state.stageRegion.xMin, state.stageRegion.yMax, width, height);
-      const stgBottomRight = worldToCanvas(state.stageRegion.xMax, state.stageRegion.yMin, width, height);
-      ctx.fillStyle = 'rgba(244, 63, 94, 0.08)';
-      ctx.strokeStyle = '#F43F5E';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(stgTopLeft.cx, stgTopLeft.cy, stgBottomRight.cx - stgTopLeft.cx, stgBottomRight.cy - stgTopLeft.cy);
-      ctx.strokeRect(stgTopLeft.cx, stgTopLeft.cy, stgBottomRight.cx - stgTopLeft.cx, stgBottomRight.cy - stgTopLeft.cy);
-      ctx.fillStyle = '#F43F5E';
-      ctx.fillText('Escenario', stgTopLeft.cx + 6, stgTopLeft.cy + 14);
+      [{
+        region: state.audienceRegion,
+        fill: 'rgba(168, 85, 247, 0.05)',
+        stroke: 'rgba(168, 85, 247, 0.35)',
+        label: 'Zona Público', labelColor: 'rgba(168, 85, 247, 0.8)',
+      }, {
+        region: state.stageRegion,
+        fill: 'rgba(244, 63, 94, 0.05)',
+        stroke: 'rgba(244, 63, 94, 0.35)',
+        label: 'Zona Escenario', labelColor: 'rgba(244, 63, 94, 0.8)',
+      }].forEach(({ region, fill, stroke, label, labelColor }) => {
+        const tl = worldToCanvas(region.xMin, region.yMax, width, height);
+        const br = worldToCanvas(region.xMax, region.yMin, width, height);
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1;
+        ctx.fillRect(tl.cx, tl.cy, br.cx - tl.cx, br.cy - tl.cy);
+        ctx.strokeRect(tl.cx, tl.cy, br.cx - tl.cx, br.cy - tl.cy);
+        ctx.fillStyle = labelColor;
+        ctx.font = '600 10px "IBM Plex Sans JP", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, tl.cx + 6, tl.cy + 14);
+      });
     }
 
-    // Líneas asintóticas de primer mínimo lateral
+    // Asymptotic minima lines
     if (state.layers.asymptoticMinima && asymptoticMin && asymptoticMin.exists) {
-      ctx.strokeStyle = 'rgba(244, 63, 94, 0.6)';
+      ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
       ctx.setLineDash([5, 5]);
-      ctx.lineWidth = 1.5;
-
+      ctx.lineWidth = 1;
       const angleRad = (asymptoticMin.angleDeg * Math.PI) / 180;
-      const length = mapSpan * 1.5;
-
-      const rays = [
+      const length = mapSpan * 2;
+      [
         { dx: length * Math.sin(angleRad), dy: length * Math.cos(angleRad) },
         { dx: -length * Math.sin(angleRad), dy: length * Math.cos(angleRad) },
         { dx: length * Math.sin(angleRad), dy: -length * Math.cos(angleRad) },
         { dx: -length * Math.sin(angleRad), dy: -length * Math.cos(angleRad) },
-      ];
-
-      rays.forEach((ray) => {
+      ].forEach((ray) => {
         const p1 = worldToCanvas(0, 0, width, height);
         const p2 = worldToCanvas(ray.dx, ray.dy, width, height);
-        ctx.beginPath();
-        ctx.moveTo(p1.cx, p1.cy);
-        ctx.lineTo(p2.cx, p2.cy);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p1.cx, p1.cy); ctx.lineTo(p2.cx, p2.cy); ctx.stroke();
       });
       ctx.setLineDash([]);
     }
 
-    // Puntos Críticos (círculo = mínimo, triángulo = máximo, cuadrado = silla)
+    // Critical points
     if (state.layers.criticalPoints && isSettled && criticalPoints.length > 0) {
       criticalPoints.forEach((pt) => {
         const { cx, cy } = worldToCanvas(pt.x, pt.y, width, height);
         ctx.lineWidth = 1.5;
-
         if (pt.type === 'minimum') {
-          ctx.strokeStyle = '#A855F7';
-          ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
-          ctx.beginPath();
-          ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.stroke();
+          ctx.strokeStyle = '#A855F7'; ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
+          ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
         } else if (pt.type === 'maximum') {
-          ctx.strokeStyle = '#10B981';
-          ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
-          ctx.beginPath();
-          ctx.moveTo(cx, cy - 6);
-          ctx.lineTo(cx + 6, cy + 5);
-          ctx.lineTo(cx - 6, cy + 5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
+          ctx.strokeStyle = '#10B981'; ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
+          ctx.beginPath(); ctx.moveTo(cx, cy - 6); ctx.lineTo(cx + 6, cy + 5); ctx.lineTo(cx - 6, cy + 5); ctx.closePath(); ctx.fill(); ctx.stroke();
         } else if (pt.type === 'saddle') {
-          ctx.strokeStyle = '#F43F5E';
-          ctx.fillStyle = 'rgba(244, 63, 94, 0.4)';
-          ctx.beginPath();
-          ctx.strokeRect(cx - 5, cy - 5, 10, 10);
-          ctx.fillRect(cx - 5, cy - 5, 10, 10);
+          ctx.strokeStyle = '#F43F5E'; ctx.fillStyle = 'rgba(244, 63, 94, 0.4)';
+          ctx.strokeRect(cx - 5, cy - 5, 10, 10); ctx.fillRect(cx - 5, cy - 5, 10, 10);
         }
       });
     }
 
-    // Altavoces Subwoofers
-    derived.sources.forEach((s, idx) => {
+    // Speakers / Subwoofers — with ANTI-COLLISION LABELS
+    derived.sources.forEach((s) => {
       const { cx, cy } = worldToCanvas(s.x, s.y, width, height);
+      const isFront = s.x >= 0;
+      const isRear = s.polarity === -1;
 
-      // Disco exterior: Trasero rojo, frontal morado
-      ctx.fillStyle = s.polarity === -1 ? '#E11D48' : '#7C3AED';
+      // Glow effect
+      ctx.shadowColor = isRear ? '#F43F5E' : '#A855F7';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = isRear ? '#F43F5E' : '#A855F7';
       ctx.beginPath();
-      ctx.arc(cx, cy, 9, 0, 2 * Math.PI);
+      ctx.arc(cx, cy, 8.5, 0, 2 * Math.PI);
       ctx.fill();
+      ctx.shadowBlur = 0;
+
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.6;
       ctx.stroke();
 
-      // Símbolo + o -
+      // Sign inside speaker circle (+ or -)
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(s.polarity === -1 ? '−' : '+', cx, cy + 0.5);
 
-      // Etiqueta
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '10px "IBM Plex Sans JP", sans-serif';
-      ctx.fillText(
-        `S${idx + 1} (${s.delay > 0 ? (s.delay * 1000).toFixed(2) + 'ms' : '0ms'})`,
-        cx,
-        cy + 18
-      );
+      // Label: Stagger horizontally so S1 and S2 NEVER collide
+      const labelText = isFront ? 'S2 (Frontal)' : 'S1 (Trasera)';
+      ctx.font = '600 10px "IBM Plex Sans JP", sans-serif';
+      const textMetrics = ctx.measureText(labelText);
+      const textW = textMetrics.width;
+
+      const labelX = isFront ? cx + 14 : cx - 14;
+      const labelY = cy + 3.5;
+      ctx.textAlign = isFront ? 'left' : 'right';
+
+      // Theme-adaptive badge behind text for crisp readability
+      ctx.fillStyle = isDark ? 'rgba(8, 10, 20, 0.85)' : 'rgba(255, 255, 255, 0.92)';
+      const pad = 3;
+      const pillX = isFront ? labelX - pad : labelX - textW - pad;
+      ctx.beginPath();
+      ctx.roundRect(pillX, labelY - 10, textW + pad * 2, 14, 4);
+      ctx.fill();
+      ctx.strokeStyle = isFront
+        ? (isDark ? 'rgba(168, 85, 247, 0.5)' : 'rgba(124, 58, 237, 0.4)')
+        : (isDark ? 'rgba(244, 63, 94, 0.5)' : 'rgba(225, 29, 72, 0.4)');
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = isDark
+        ? (isFront ? '#D8B4FE' : '#FDA4AF')
+        : (isFront ? '#6B21A8' : '#BE123C');
+      ctx.fillText(labelText, labelX, labelY);
     });
 
-    // Punto inspeccionado y flecha de gradiente
+    // Inspected point & Gradient vector
     if (state.inspectedPoint) {
       const { cx, cy } = worldToCanvas(state.inspectedPoint.x, state.inspectedPoint.y, width, height);
-
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isDark ? '#FFFFFF' : '#0F172A';
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
-      ctx.moveTo(cx - 9, cy);
-      ctx.lineTo(cx + 9, cy);
-      ctx.moveTo(cx, cy - 9);
-      ctx.lineTo(cx, cy + 9);
+      ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy);
+      ctx.moveTo(cx, cy - 9); ctx.lineTo(cx, cy + 9);
       ctx.stroke();
 
       if (state.layers.gradientVector) {
-        const grad = calculateAnalyticalGradient(
-          state.inspectedPoint.x,
-          state.inspectedPoint.y,
-          derived.precomputedSources,
-          derived.k
-        );
-
+        const grad = calculateAnalyticalGradient(state.inspectedPoint.x, state.inspectedPoint.y, derived.precomputedSources, derived.k);
         if (grad.gradMagE > 1e-6) {
           const arrowLen = 34;
-          const arrowNormX = grad.gradE_x / grad.gradMagE;
-          const arrowNormY = grad.gradE_y / grad.gradMagE;
-
-          const targetCx = cx + arrowNormX * arrowLen;
-          const targetCy = cy - arrowNormY * arrowLen;
-
-          ctx.strokeStyle = '#A855F7';
-          ctx.fillStyle = '#A855F7';
-          ctx.lineWidth = 2.5;
-
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(targetCx, targetCy);
-          ctx.stroke();
-
-          const headAngle = Math.atan2(targetCy - cy, targetCx - cx);
-          const headSize = 7;
-          ctx.beginPath();
-          ctx.moveTo(targetCx, targetCy);
-          ctx.lineTo(
-            targetCx - headSize * Math.cos(headAngle - Math.PI / 6),
-            targetCy - headSize * Math.sin(headAngle - Math.PI / 6)
-          );
-          ctx.lineTo(
-            targetCx - headSize * Math.cos(headAngle + Math.PI / 6),
-            targetCy - headSize * Math.sin(headAngle + Math.PI / 6)
-          );
-          ctx.closePath();
-          ctx.fill();
+          const nx = grad.gradE_x / grad.gradMagE;
+          const ny = grad.gradE_y / grad.gradMagE;
+          const tx = cx + nx * arrowLen;
+          const ty = cy - ny * arrowLen;
+          const vectorColor = isDark ? '#C084FC' : '#7C3AED';
+          ctx.strokeStyle = vectorColor;
+          ctx.fillStyle = vectorColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tx, ty); ctx.stroke();
+          const ha = Math.atan2(ty - cy, tx - cx);
+          ctx.beginPath(); ctx.moveTo(tx, ty);
+          ctx.lineTo(tx - 6 * Math.cos(ha - Math.PI / 6), ty - 6 * Math.sin(ha - Math.PI / 6));
+          ctx.lineTo(tx - 6 * Math.cos(ha + Math.PI / 6), ty - 6 * Math.sin(ha + Math.PI / 6));
+          ctx.closePath(); ctx.fill();
         }
       }
     }
 
     ctx.restore();
   }, [
-    isSettled,
-    derived,
-    state.layers,
-    state.inspectedPoint,
-    state.audienceRegion,
-    state.stageRegion,
-    criticalPoints,
-    asymptoticMin,
-    mapSpan,
-    xMin,
-    xMax,
-    yMin,
-    yMax,
-    worldToCanvas,
+    isSettled, derived, state.layers, state.inspectedPoint,
+    state.audienceRegion, state.stageRegion, state.viewMode,
+    criticalPoints, asymptoticMin, mapSpan, aspect, isDark,
+    xMin, xMax, yMin, yMax, worldToCanvas, canvasSize,
   ]);
 
-  const handleMouseDown = (e) => {
+  // Pointer interaction: Drag to pan with PointerCapture vs Click to inspect
+  const handlePointerDown = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignore
+    }
+
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
-    const { wx, wy } = canvasToWorld(cx, cy, canvas.width, canvas.height);
-    dispatch({ type: 'SET_INSPECTED_POINT', payload: { x: wx, y: wy } });
-    setIsDragging(true);
-  };
+    setDragState({
+      pointerId: e.pointerId,
+      startX: cx,
+      startY: cy,
+      startPanX: panOffset.x,
+      startPanY: panOffset.y,
+      moved: false,
+    });
+  }, [panOffset]);
 
-  const handleMouseMove = (e) => {
+  const handlePointerMove = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
-    const { wx, wy } = canvasToWorld(cx, cy, canvas.width, canvas.height);
+    if (dragState) {
+      const dxPx = cx - dragState.startX;
+      const dyPx = cy - dragState.startY;
+      if (Math.hypot(dxPx, dyPx) > 3) {
+        const metersPerPixelX = (xMax - xMin) / rect.width;
+        const metersPerPixelY = (yMax - yMin) / rect.height;
+        const nextPanX = dragState.startPanX - dxPx * metersPerPixelX;
+        const nextPanY = dragState.startPanY + dyPx * metersPerPixelY;
+        dispatch({ type: 'SET_PAN_OFFSET', payload: { x: nextPanX, y: nextPanY } });
+        setDragState(prev => prev ? { ...prev, moved: true } : null);
+        return;
+      }
+    }
 
+    const now = performance.now();
+    if (now - lastHoverTimeRef.current < 35) return;
+    lastHoverTimeRef.current = now;
+
+    // 100% exact projection to world coordinates using actual bounding rect
+    const { wx, wy } = canvasToWorld(cx, cy, rect.width, rect.height);
     const ptField = calculatePointField(wx, wy, derived.precomputedSources, derived.k);
     setHoverInfo({ x: wx, y: wy, levelDB: ptField.levelDB });
+  }, [dragState, canvasToWorld, derived.precomputedSources, derived.k, xMin, xMax, yMin, yMax, dispatch]);
 
-    if (isDragging) {
+  const handlePointerUp = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (canvas && dragState?.pointerId !== undefined) {
+      try {
+        canvas.releasePointerCapture(dragState.pointerId);
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    if (dragState && !dragState.moved && canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const { wx, wy } = canvasToWorld(cx, cy, rect.width, rect.height);
       dispatch({ type: 'SET_INSPECTED_POINT', payload: { x: wx, y: wy } });
     }
+    setDragState(null);
+  }, [dragState, canvasToWorld, dispatch]);
+
+  const handlePointerCancel = useCallback(() => {
+    setDragState(null);
+  }, []);
+
+  const handleZoom = (direction) => {
+    const factor = direction === 'in' ? 0.8 : 1.25;
+    const newSpan = Math.min(Math.max(mapSpan * factor, 2.5), 50.0);
+    dispatch({ type: 'SET_MAP_SPAN', payload: newSpan });
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
+  const handleReset = () => {
+    dispatch({ type: 'RESET_VIEW' });
   };
+
+  const isReversedWarning = state.polarityRear === 1 && state.delayRear > 0;
 
   return (
-    <div className="flex-1 flex flex-col bg-surface border border-border rounded-2xl overflow-hidden shadow-sm relative">
-      {/* Barra superior de herramientas y capas */}
-      <div className="flex flex-wrap items-center justify-between border-b border-border/80 bg-surface px-4 py-2.5 text-xs gap-3">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-full bg-purple text-white px-3 py-1 font-medium shadow-sm"
-          >
-            <Crosshair className="h-3.5 w-3.5" />
-            <span>Punto & Gradiente</span>
-          </button>
+    <div className="w-full h-full flex flex-col relative overflow-hidden select-none bg-[#090B14]">
+      {/* ═══ VIEWPORT TOP BAR: Fixed height h-8 (32px), NEVER expands or shrinks ═══ */}
+      <div className="h-8 min-h-[32px] max-h-[32px] flex items-center justify-between px-3 glass-strong border-b border-border text-[11px] z-10 flex-shrink-0 overflow-hidden">
+        <div className="flex items-center gap-2 font-mono">
+          <span className="font-semibold text-text">Campo 2D</span>
+          <span className="text-[10px] text-muted opacity-75">±{mapSpan.toFixed(0)}m</span>
+          <span className="text-[9px] text-muted hidden md:inline opacity-60">Escenario (−x) ◄───► Público (+x)</span>
         </div>
 
-        {/* Capas conmutables tipo pill */}
-        <div className="flex items-center gap-2 text-[11px]">
-          <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-full border border-border px-2.5 py-0.5 hover:bg-surface-2 transition-colors">
-            <input
-              type="checkbox"
-              checked={state.layers.contours}
-              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'contours' })}
-              className="accent-purple rounded"
-            />
-            <span className="text-text">Curvas 3 dB</span>
-          </label>
-          <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-full border border-border px-2.5 py-0.5 hover:bg-surface-2 transition-colors">
-            <input
-              type="checkbox"
-              checked={state.layers.gradientVector}
-              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'gradientVector' })}
-              className="accent-purple rounded"
-            />
-            <span className="text-text">Vector ∇E</span>
-          </label>
-          <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-full border border-border px-2.5 py-0.5 hover:bg-surface-2 transition-colors">
-            <input
-              type="checkbox"
-              checked={state.layers.criticalPoints}
-              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'criticalPoints' })}
-              className="accent-purple rounded"
-            />
-            <span className="text-text">Puntos Críticos</span>
-          </label>
+        {/* HUD readout */}
+        <div className="flex items-center gap-2">
+          {hoverInfo ? (
+            <div className="flex items-center gap-2 font-mono text-[10px] bg-purple/10 border border-purple/25 text-purple-dark dark:text-purple-light px-2.5 py-0.5 rounded-full shadow-sm">
+              <span>x: {hoverInfo.x.toFixed(1)}m</span>
+              <span>y: {hoverInfo.y.toFixed(1)}m</span>
+              <strong className="font-bold">{hoverInfo.levelDB.toFixed(1)} dB</strong>
+            </div>
+          ) : (
+            <span className="text-[10px] text-muted hidden sm:inline">Rueda: zoom · Arrastre: mover</span>
+          )}
+
+          {isReversedWarning && (
+            <span className="text-[9px] font-semibold text-warm bg-warm/15 border border-warm/30 px-2 py-0.5 rounded-full">
+              ⚠️ Emite a Escenario
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Canvas 2D */}
-      <div className="relative flex-1 flex items-center justify-center p-3 bg-slate-950 min-h-[380px]">
+      {/* ═══ CANVAS VIEWPORT AREA ═══ */}
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
         <canvas
           ref={canvasRef}
-          width={640}
-          height={480}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={() => {
-            handleMouseUp();
-            setHoverInfo(null);
-          }}
-          className="max-w-full h-auto rounded-xl border border-white/10 cursor-crosshair shadow-lg"
-          aria-label="Mapa interactivo del campo acústico del arreglo"
+          width={canvasSize.w}
+          height={canvasSize.h}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={() => { if (!dragState) setHoverInfo(null); }}
+          className={`absolute inset-0 w-full h-full touch-none ${dragState?.moved ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+          aria-label="Mapa interactivo del campo acústico"
         />
-
-        {/* Coordenadas flotantes estilo HUD */}
-        {hoverInfo && (
-          <div className="absolute top-5 left-5 bg-slate-900/90 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-full text-xs font-mono shadow text-white pointer-events-none flex items-center gap-2">
-            <span>x: {hoverInfo.x.toFixed(2)}m</span>
-            <span>y: {hoverInfo.y.toFixed(2)}m</span>
-            <span className="font-bold text-purple-light">| {hoverInfo.levelDB.toFixed(1)} dB</span>
-          </div>
-        )}
       </div>
 
-      {/* Barra de escala en dB */}
-      <div className="flex items-center justify-between px-5 py-2.5 bg-surface border-t border-border/80 text-[11px]">
-        <span className="text-muted font-medium">Nivel SPL:</span>
-        <div className="flex-1 mx-4 flex flex-col gap-1">
-          <div
-            className="h-2.5 w-full rounded-full"
-            style={{
-              background:
-                'linear-gradient(to right, #0e0f1e, #28114b, #64186e, #b43664, #f0733c, #fac850, #fcfdbf)',
-            }}
-          />
-          <div className="flex justify-between text-[10px] text-muted font-mono">
-            <span>−40 dB</span>
-            <span>−20 dB</span>
-            <span>0 dB (ref)</span>
-            <span>+6 dB</span>
-            <span>+12 dB</span>
+      {/* ═══ VIEWPORT BOTTOM FOOTER: Fixed height h-8 (32px), NEVER expands or shrinks ═══ */}
+      <div className="h-8 min-h-[32px] max-h-[32px] flex items-center justify-between px-2.5 glass-strong border-t border-border z-10 gap-2 flex-shrink-0 overflow-hidden">
+        {/* Left: Zoom Controls & Presets */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => handleZoom('in')}
+            className="p-1 rounded-md text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            title="Acercar (Zoom In)"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleZoom('out')}
+            className="p-1 rounded-md text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            title="Alejar (Zoom Out)"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="p-1 rounded-md text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            title="Restablecer vista a ±12m"
+          >
+            <RotateCcw className="h-3 w-3" />
+          </button>
+
+          <div className="w-px h-3.5 bg-border mx-1" />
+
+          {[3, 12, 25].map((val) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => dispatch({ type: 'SET_MAP_SPAN', payload: val })}
+              className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors ${
+                Math.abs(mapSpan - val) < 1.5
+                  ? 'bg-purple/20 text-purple-dark dark:text-purple-light font-bold border border-purple/30'
+                  : 'text-muted hover:text-text'
+              }`}
+            >
+              {val}m
+            </button>
+          ))}
+        </div>
+
+        {/* Center: Color gradient (only in heatmap view when space permits) */}
+        {state.viewMode !== 'contours' && (
+          <div className="hidden 2xl:flex items-center gap-1.5 pointer-events-none">
+            <span className="text-[8px] text-muted font-mono">−40dB</span>
+            <div
+              className="h-1.5 w-16 rounded-full opacity-80"
+              style={{
+                background: 'linear-gradient(to right, #0e0f1e, #28114b, #64186e, #b43664, #f0733c, #fac850, #fcfdbf)',
+              }}
+            />
+            <span className="text-[8px] text-muted font-mono">+12dB</span>
           </div>
+        )}
+
+        {/* Right: Layer Toggles */}
+        <div className="flex items-center gap-1">
+          {[
+            { key: 'contours', label: 'Curvas' },
+            { key: 'gradientVector', label: '∇ Grad' },
+            { key: 'criticalPoints', label: 'Pt. Crít.' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => dispatch({ type: 'TOGGLE_LAYER', payload: key })}
+              className={`rounded-md px-2 py-0.5 text-[9px] font-medium transition-all border ${
+                state.layers[key]
+                  ? 'text-purple-dark dark:text-purple-light bg-purple/15 dark:bg-purple/25 border-purple/30 font-semibold'
+                  : 'text-muted hover:text-text border-transparent'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
     </div>
   );
-}
+});

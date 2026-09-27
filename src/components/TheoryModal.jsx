@@ -13,7 +13,11 @@ export default function TheoryModal() {
       <div className="bg-surface border border-border rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-surface-2">
           <div className="flex items-center gap-2.5">
-            <BookOpen className="h-4 w-4 text-purple" />
+            <img
+              src="/logo-original.png"
+              alt="BONAIS"
+              className="h-5 w-5 rounded object-contain"
+            />
             <h2 className="text-base font-bold text-text">Fundamentos Teóricos y Matemáticos (Cálculo III)</h2>
           </div>
           <button

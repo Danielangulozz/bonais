@@ -3,31 +3,50 @@
 @tailwind utilities;
 
 :root {
-  /* Modo Claro - Estilo Apple/Tesla Minimalista */
-  --bg: #F8FAFC;
-  --surface: #FFFFFF;
-  --surface-2: #F1F5F9;
-  --border: #E2E8F0;
-  --text: #0F172A;
-  --muted: #64748B;
-  --accent: #7C3AED;  /* Morado refinado */
-  --warm: #E11D48;    /* Rojo carmesí elegante */
-  --danger: #DC2626;
-  --ok: #059669;
+  --bg: #080A12;
+  --surface: rgba(15, 18, 30, 0.65);
+  --surface-solid: #0F121E;
+  --surface-2: rgba(22, 26, 42, 0.55);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(124, 58, 237, 0.15);
+  --text: #F1F5F9;
+  --muted: rgba(148, 163, 184, 0.85);
+  --accent: #A855F7;
+  --warm: #F43F5E;
+  --danger: #EF4444;
+  --ok: #10B981;
+  --glass-blur: 20px;
+  --glass-bg: rgba(10, 12, 22, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.07);
 }
 
 .dark {
-  /* Modo Oscuro Minimalista */
-  --bg: #0B0F17;
-  --surface: #131B26;
-  --surface-2: #1A2433;
-  --border: #243042;
+  --bg: #080A12;
+  --surface: rgba(15, 18, 30, 0.65);
+  --surface-solid: #0F121E;
+  --surface-2: rgba(22, 26, 42, 0.55);
+  --border: rgba(255, 255, 255, 0.08);
   --text: #F1F5F9;
-  --muted: #94A3B8;
-  --accent: #A855F7;  /* Morado luminoso */
-  --warm: #F43F5E;    /* Rojo vivo */
+  --muted: rgba(148, 163, 184, 0.85);
+  --accent: #A855F7;
+  --warm: #F43F5E;
   --danger: #EF4444;
   --ok: #10B981;
+}
+
+/* Light mode */
+html:not(.dark) {
+  --bg: #F0F2F8;
+  --surface: rgba(255, 255, 255, 0.65);
+  --surface-solid: #FFFFFF;
+  --surface-2: rgba(241, 245, 249, 0.6);
+  --border: rgba(0, 0, 0, 0.06);
+  --border-glow: rgba(124, 58, 237, 0.1);
+  --text: #0F172A;
+  --muted: rgba(100, 116, 139, 0.9);
+  --accent: #7C3AED;
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(0, 0, 0, 0.06);
 }
 
 body {
@@ -37,28 +56,212 @@ body {
   font-variant-numeric: tabular-nums;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Tipografía de lectura para la sección de teoría */
+/* ═══════════════════════════════════════════
+   GLASS PANELS — Spatial depth layers
+   ═══════════════════════════════════════════ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.12),
+    0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.glass-strong {
+  background: rgba(10, 12, 22, 0.72);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.2),
+    0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+html:not(.dark) .glass-strong {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.06),
+    0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+html:not(.dark) .glass {
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.04),
+    0 0 1px rgba(255, 255, 255, 0.6) inset;
+}
+
+/* ═══════════════════════════════════════════
+   CUSTOM RANGE SLIDER — Spatial glass thumb
+   ═══════════════════════════════════════════ */
+input[type="range"].slider-custom {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+html:not(.dark) input[type="range"].slider-custom {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+input[type="range"].slider-custom:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html:not(.dark) input[type="range"].slider-custom:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* Thumb - WebKit */
+input[type="range"].slider-custom::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 0 12px rgba(168, 85, 247, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  margin-top: -6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"].slider-custom::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow:
+    0 0 20px rgba(168, 85, 247, 0.55),
+    0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+input[type="range"].slider-custom::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.08);
+}
+
+input[type="range"].slider-custom::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+/* Thumb - Firefox */
+input[type="range"].slider-custom::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 0 12px rgba(168, 85, 247, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  transition: transform 0.15s ease;
+}
+
+input[type="range"].slider-custom::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+}
+
+/* ═══════════════════════════════════════════
+   SCROLLBAR — Invisible until hover
+   ═══════════════════════════════════════════ */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+/* ═══════════════════════════════════════════
+   Tipografía teoría
+   ═══════════════════════════════════════════ */
 .prose-theory {
   font-family: "Source Serif 4", Georgia, serif;
   max-width: 80ch;
   line-height: 1.7;
 }
 
-/* Estilos para impresión de reportes */
+/* ═══════════════════════════════════════════
+   PRINT
+   ═══════════════════════════════════════════ */
 @media print {
   body {
     background-color: #FFFFFF !important;
     color: #000000 !important;
+    overflow: auto;
   }
-  .no-print {
-    display: none !important;
-  }
-  .print-only {
-    display: block !important;
-  }
-  .page-break {
-    page-break-before: always;
-  }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .page-break { page-break-before: always; }
+}
+
+/* ═══════════════════════════════════════════
+   ANIMATIONS — Spatial transitions
+   ═══════════════════════════════════════════ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Spatial panel collapse */
+.spatial-panel {
+  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Accent glow for focused inputs */
+input[type="number"]:focus {
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25);
+}
+
+/* Remove default number input spin buttons */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
 }

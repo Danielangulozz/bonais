@@ -1,17 +1,23 @@
 /**
  * @file arrayState.js
  * @description Estado global de la aplicación BONAIS con useReducer y React Context.
+ * Context separado en State, Dispatch y Derived para evitar re-renders innecesarios.
  * Toda la lógica de estado es interna — sin sincronización con la URL.
  */
 
-import React, { createContext, useContext, useReducer, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useMemo, useCallback } from 'react';
 import { calculateSpeedOfSound, DEFAULT_TEMPERATURE, DEFAULT_FREQUENCY, DEFAULT_REFERENCE_DISTANCE } from '../core/constants.js';
 import { calculateWavelength, calculateWavenumber, calculateOmega, dBToLinear } from '../core/physics.js';
 import { createTwoSubSources, precomputeSourceCoefficients } from '../core/field.js';
 import { evaluateAllMetrics, calculateAR, calculateGFront, DEFAULT_AUDIENCE_REGION, DEFAULT_STAGE_REGION } from '../core/metrics.js';
 import { calculateFarFieldAttenuation } from '../core/farField.js';
 
-const ArrayContext = createContext(null);
+// ═══════════════════════════════════════════════════════════════════
+// Contexts separados para rendimiento óptimo
+// ═══════════════════════════════════════════════════════════════════
+const StateContext = createContext(null);
+const DispatchContext = createContext(null);
+const DerivedContext = createContext(null);
 
 // Estado inicial
 const initialTemp = DEFAULT_TEMPERATURE;
@@ -39,7 +45,7 @@ export const INITIAL_STATE = {
   dMin: 0.5,
   dMax: 2.0,
   preset: 'cardioid',
-  theme: 'light',
+  theme: 'dark',
   activeTab: 'calculus',
   selectedTool: 'point',
   inspectedPoint: { x: 5.0, y: 0.0 },
@@ -47,14 +53,19 @@ export const INITIAL_STATE = {
   stageRegion: { ...DEFAULT_STAGE_REGION },
   layers: {
     contours: true,
-    criticalPoints: true,
+    criticalPoints: false, // Apagado por defecto para limpieza visual
     gradientVector: true,
     asymptoticMinima: true,
     regions: true,
   },
+  activePage: 'landing', // 'landing' | 'simulator'
+  viewMode: 'map2d', // 'map2d' | 'polar' | 'dual' | 'contours'
+  layoutMode: 'studio', // 'studio' | 'fullscreen'
+  panOffset: { x: 0, y: 0 },
   compareMode: false,
   showTheoryModal: false,
   showExportModal: false,
+  showExperimentModal: false,
 };
 
 function arrayReducer(state, action) {
@@ -185,6 +196,27 @@ function arrayReducer(state, action) {
       };
     }
 
+    case 'SET_VIEW_MODE':
+      return { ...state, viewMode: action.payload };
+
+    case 'SET_ACTIVE_PAGE':
+      return { ...state, activePage: action.payload };
+
+    case 'SET_EXPERIMENT_MODAL':
+      return { ...state, showExperimentModal: action.payload };
+
+    case 'SET_LAYOUT_MODE':
+      return { ...state, layoutMode: action.payload };
+
+    case 'SET_MAP_SPAN':
+      return { ...state, mapSpan: Math.min(Math.max(action.payload, 2.5), 50) };
+
+    case 'SET_PAN_OFFSET':
+      return { ...state, panOffset: action.payload };
+
+    case 'RESET_VIEW':
+      return { ...state, mapSpan: 12.0, panOffset: { x: 0, y: 0 } };
+
     default:
       return state;
   }
@@ -192,6 +224,9 @@ function arrayReducer(state, action) {
 
 export function ArrayProvider({ children }) {
   const [state, dispatch] = useReducer(arrayReducer, INITIAL_STATE);
+
+  // Estabilizar dispatch con useCallback (es estable por naturaleza, pero explicitamos)
+  const stableDispatch = useCallback(dispatch, []);
 
   // Efecto para aplicar tema claro/oscuro en el elemento html
   useEffect(() => {
@@ -331,15 +366,50 @@ export function ArrayProvider({ children }) {
     },
   }), [derived, metrics]);
 
-  const value = useMemo(() => ({ state, dispatch, derived: fullDerived }), [state, fullDerived]);
-
-  return React.createElement(ArrayContext.Provider, { value }, children);
+  return React.createElement(
+    StateContext.Provider,
+    { value: state },
+    React.createElement(
+      DispatchContext.Provider,
+      { value: stableDispatch },
+      React.createElement(
+        DerivedContext.Provider,
+        { value: fullDerived },
+        children
+      )
+    )
+  );
 }
 
-export function useArray() {
-  const context = useContext(ArrayContext);
-  if (!context) {
-    throw new Error('useArray debe utilizarse dentro de un ArrayProvider');
-  }
+// ═══════════════════════════════════════════════════════════════════
+// Hooks granulares — usa el más específico posible
+// ═══════════════════════════════════════════════════════════════════
+
+/** Solo el state — re-renders cuando el state cambia */
+export function useArrayState() {
+  const context = useContext(StateContext);
+  if (context === null) throw new Error('useArrayState debe utilizarse dentro de un ArrayProvider');
   return context;
+}
+
+/** Solo dispatch — NUNCA re-renderiza por cambios de state */
+export function useArrayDispatch() {
+  const context = useContext(DispatchContext);
+  if (context === null) throw new Error('useArrayDispatch debe utilizarse dentro de un ArrayProvider');
+  return context;
+}
+
+/** Solo derived — re-renders cuando los cálculos derivados cambian */
+export function useArrayDerived() {
+  const context = useContext(DerivedContext);
+  if (context === null) throw new Error('useArrayDerived debe utilizarse dentro de un ArrayProvider');
+  return context;
+}
+
+/** Wrapper compatible con el API existente — usa los hooks granulares internamente */
+export function useArray() {
+  const state = useArrayState();
+  const dispatch = useArrayDispatch();
+  const derived = useArrayDerived();
+  return { state, dispatch, derived };
 }

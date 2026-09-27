@@ -32,8 +32,24 @@ export default function FrequencyPanel() {
       tau: state.delayRear,
       speedOfSound: derived.c,
       rDistance: state.referenceDistance,
+      gainFront: derived.gainFrontLinear,
+      gainRear: derived.gainRearLinear,
+      polarityFront: state.polarityFront,
+      polarityRear: state.polarityRear,
+      delayFront: state.delayFront,
+      delayRear: state.delayRear,
     });
-  }, [state.separation, state.delayRear, derived.c, state.referenceDistance]);
+  }, [
+    state.separation,
+    state.delayRear,
+    state.delayFront,
+    derived.c,
+    state.referenceDistance,
+    derived.gainFrontLinear,
+    derived.gainRearLinear,
+    state.polarityFront,
+    state.polarityRear,
+  ]);
 
   // Banda útil a -3 dB
   const passband = useMemo(() => {
@@ -47,9 +63,25 @@ export default function FrequencyPanel() {
       speedOfSound: derived.c,
       d: state.separation,
       tau: state.delayRear,
+      gainFront: derived.gainFrontLinear,
+      gainRear: derived.gainRearLinear,
+      polarityFront: state.polarityFront,
+      polarityRear: state.polarityRear,
+      delayFront: state.delayFront,
+      delayRear: state.delayRear,
       stepDeg: 2,
     });
-  }, [state.frequency, derived.c, state.separation, state.delayRear]);
+  }, [
+    state.frequency,
+    derived.c,
+    state.separation,
+    state.delayRear,
+    state.delayFront,
+    derived.gainFrontLinear,
+    derived.gainRearLinear,
+    state.polarityFront,
+    state.polarityRear,
+  ]);
 
   // Renderizado del Diagrama Polar en Canvas 2D
   useEffect(() => {
