@@ -3,31 +3,31 @@
 @tailwind utilities;
 
 :root {
-  --bg: #080A12;
-  --surface: rgba(15, 18, 30, 0.65);
-  --surface-solid: #0F121E;
-  --surface-2: rgba(22, 26, 42, 0.55);
+  --bg: #000000;
+  --surface: rgba(16, 14, 24, 0.65);
+  --surface-solid: #08080E;
+  --surface-2: rgba(255, 255, 255, 0.04);
   --border: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(124, 58, 237, 0.15);
-  --text: #F1F5F9;
-  --muted: rgba(148, 163, 184, 0.85);
+  --border-glow: rgba(124, 58, 237, 0.18);
+  --text: #F8FAFC;
+  --muted: rgba(148, 163, 184, 0.82);
   --accent: #A855F7;
   --warm: #F43F5E;
   --danger: #EF4444;
   --ok: #10B981;
-  --glass-blur: 20px;
-  --glass-bg: rgba(10, 12, 22, 0.55);
-  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-blur: 24px;
+  --glass-bg: rgba(14, 12, 22, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 
 .dark {
-  --bg: #080A12;
-  --surface: rgba(15, 18, 30, 0.65);
-  --surface-solid: #0F121E;
-  --surface-2: rgba(22, 26, 42, 0.55);
+  --bg: #000000;
+  --surface: rgba(16, 14, 24, 0.65);
+  --surface-solid: #08080E;
+  --surface-2: rgba(255, 255, 255, 0.04);
   --border: rgba(255, 255, 255, 0.08);
-  --text: #F1F5F9;
-  --muted: rgba(148, 163, 184, 0.85);
+  --text: #F8FAFC;
+  --muted: rgba(148, 163, 184, 0.82);
   --accent: #A855F7;
   --warm: #F43F5E;
   --danger: #EF4444;
@@ -36,17 +36,17 @@
 
 /* Light mode */
 html:not(.dark) {
-  --bg: #F0F2F8;
-  --surface: rgba(255, 255, 255, 0.65);
+  --bg: #FFFFFF;
+  --surface: rgba(255, 255, 255, 0.78);
   --surface-solid: #FFFFFF;
-  --surface-2: rgba(241, 245, 249, 0.6);
-  --border: rgba(0, 0, 0, 0.06);
-  --border-glow: rgba(124, 58, 237, 0.1);
-  --text: #0F172A;
-  --muted: rgba(100, 116, 139, 0.9);
+  --surface-2: rgba(15, 23, 42, 0.035);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-glow: rgba(124, 58, 237, 0.12);
+  --text: #090A0F;
+  --muted: rgba(71, 85, 105, 0.88);
   --accent: #7C3AED;
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(15, 23, 42, 0.08);
 }
 
 body {
@@ -264,4 +264,110 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* ═══════════════════════════════════════════
+   Fórmulas del panel "Modelo en vivo"
+   ═══════════════════════════════════════════ */
+.live-eq .katex-display {
+  margin: 0;
+  text-align: left;
+}
+.live-eq .katex-display > .katex {
+  text-align: left;
+  font-size: 0.96em;
+}
+.live-eq .katex {
+  color: var(--text);
+}
+
+/* ═══════════════════════════════════════════
+   PORTADA & SIMULADOR — Cristal estilo Apple / Starlink
+   ═══════════════════════════════════════════ */
+html { scroll-behavior: smooth; }
+
+.landing-glass {
+  background: rgba(20, 16, 30, 0.52);
+  backdrop-filter: blur(24px) saturate(1.7);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 10px 40px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html:not(.dark) .landing-glass {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 32px -12px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.sim-panel {
+  background: rgba(14, 12, 22, 0.72);
+  backdrop-filter: blur(28px) saturate(1.65);
+  -webkit-backdrop-filter: blur(28px) saturate(1.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+html:not(.dark) .sim-panel {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow: 0 12px 36px -12px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.sim-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+html:not(.dark) .sim-card {
+  background: rgba(15, 23, 42, 0.025);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.landing-display {
+  font-weight: 300;
+  font-size: clamp(44px, 5.6vw, 88px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: var(--text);
+}
+
+.landing-h2 {
+  font-weight: 300;
+  font-size: clamp(32px, 4.4vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.landing-eq .katex-display { margin: 0; text-align: left; }
+.landing-eq .katex-display > .katex { text-align: left; font-size: 1.28em; }
+
+/* Campo del hero: velado en reposo, nítido y brillante al pasar el cursor por el gráfico */
+.hero-field {
+  filter: blur(7px);
+  opacity: 0.6;
+  transform: scale(1.03);
+  transition: filter 0.6s ease, opacity 0.6s ease, transform 0.6s ease;
+}
+
+.hero-hit:hover ~ .hero-field {
+  filter: blur(0);
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Sin cursor no hay hover: en pantallas táctiles el gráfico se muestra nítido */
+@media (hover: none) {
+  .hero-field {
+    filter: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .hero-field { transition: none; }
+  .animate-fade-in, .animate-slide-up { animation: none; }
 }

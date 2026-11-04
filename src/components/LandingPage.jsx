@@ -1,428 +1,355 @@
-import React from 'react';
-import { useArrayState, useArrayDispatch, useArrayDerived } from '../state/arrayState.js';
-import {
-  Sliders, Activity, Calculator, Sparkles, BookOpen,
-  ArrowRight, Waves, Radio, CheckCircle2, Shield, Sun, Moon,
-  Cpu, Music, Layers, Compass, BarChart3, FlaskConical
-} from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useArrayState, useArrayDispatch } from '../state/arrayState.js';
+import { calculateSpeedOfSound } from '../core/constants.js';
+import { createTwoSubSources, precomputeSourceCoefficients } from '../core/field.js';
+import { evaluateAllMetrics, calculateAR, calculateQPE, DEFAULT_AUDIENCE_REGION, DEFAULT_STAGE_REGION } from '../core/metrics.js';
+import WaveHero, { morphSources } from './landing/WaveHero.jsx';
+import FieldThumb from './landing/FieldThumb.jsx';
+import KaTeXMath from './KaTeXMath.jsx';
+import { ArrowRight, Sun, Moon } from 'lucide-react';
+
+const INTRO_HOLD_MS = 1800;
+const MODE_HOLD_MS = 5000;
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const fmt = (v, dp = 1) => {
+  if (!Number.isFinite(v)) return '—';
+  const s = v.toFixed(dp);
+  return (Number(s) === 0 ? (0).toFixed(dp) : s).replace('.', ',');
+};
+
+/** Diseño de referencia de la portada: 80 Hz, d = λ/4, τ = d/c, 20 °C. */
+function useReferenceDesign() {
+  return useMemo(() => {
+    const f = 80;
+    const c = calculateSpeedOfSound(20);
+    const k = (2 * Math.PI * f) / c;
+    const omega = 2 * Math.PI * f;
+    const d = c / f / 4;
+    const tau = d / c;
+    const metrics = evaluateAllMetrics({
+      frequency: f, speedOfSound: c, separation: d, delayRear: tau,
+      polarityRear: -1, polarityFront: 1, rDistance: 10, n: 48,
+    });
+    const cardioid = precomputeSourceCoefficients(
+      createTwoSubSources({ separation: d, delayRear: tau, polarityRear: -1, polarityFront: 1 }), omega,
+    );
+    const inPhase = precomputeSourceCoefficients(
+      createTwoSubSources({ separation: d, delayRear: 0, polarityRear: 1, polarityFront: 1 }), omega,
+    );
+    return { f, c, k, d, tau, metrics, cardioid, inPhase };
+  }, []);
+}
+
+const EQUATIONS = [
+  {
+    math: 'P_{\\text{total}}(x,y) = \\sum_{n=1}^{2} \\frac{A_n}{r_n}\\, e^{-j(k r_n + \\omega\\tau_n + \\theta_n)}',
+    title: 'El campo es una función de dos variables',
+    text: 'Cada subwoofer es una fuente puntual. Sumando sus ondas se obtiene la presión en cada punto del recinto; su energía E = |P|² se lee con curvas de nivel, gradiente y Hessiano.',
+    ref: 'Secciones 4.2 a 4.5',
+  },
+  {
+    math: 'A(d,\\tau) = 20\\log_{10}\\frac{|P_\\infty(0)|}{|P_\\infty(\\pi)|}, \\qquad d^* = \\tfrac{\\lambda}{4},\\ \\ \\tau^* = \\tfrac{d^*}{c}',
+    title: 'El diseño es otra función de dos variables',
+    text: 'Cambiando las variables de posición por las de diseño, la atenuación trasera depende de la separación y del retardo. Lagrange entrega el óptimo.',
+    ref: 'Sección 4.5.1',
+  },
+  {
+    math: 'Q_{PE} = 10\\log_{10}\\frac{\\iint_{R_\\text{púb}} E\\,dA}{\\iint_{R_\\text{esc}} E\\,dA}',
+    title: 'La energía se mide sobre áreas, no en puntos',
+    text: 'Integrales dobles sobre la zona del público y la del escenario dicen cuánta energía recibe cada una. BONAIS las aproxima con la regla del punto medio.',
+    ref: 'Sección 4.6',
+  },
+];
+
+const SPECIFIC_OBJECTIVES = [
+  { verb: 'Relacionar', rest: 'la energía total de una región con interferencia y la suma de las energías de cada fuente por separado.' },
+  { verb: 'Cuantificar', rest: 'la atenuación trasera del arreglo cardioide y el cociente de energía entre público y escenario, frente a dos subwoofers en fase.' },
+  { verb: 'Comparar', rest: 'la variación de atenuación trasera ante errores mínimos de retardo y de separación propios del montaje.' },
+];
+
+const TEAM = [
+  { name: 'Cielo Ochoa', role: 'Identidad visual y organización del proyecto. Autora del logo.' },
+  { name: 'Daniel Angulo', role: 'Desarrollo de BONAIS: motor de simulación y visualización.' },
+  { name: 'Jerónimo Gómez', role: 'Análisis matemático y validación de los resultados.' },
+];
 
 export default function LandingPage() {
   const state = useArrayState();
   const dispatch = useArrayDispatch();
-  const derived = useArrayDerived();
-
+  const ref = useReferenceDesign();
   const isDark = state.theme === 'dark';
 
-  const toggleTheme = () => {
-    dispatch({
-      type: 'SET_THEME',
-      payload: isDark ? 'light' : 'dark',
-    });
-  };
-
   const goToSimulator = () => {
+    window.scrollTo({ top: 0 });
     dispatch({ type: 'SET_ACTIVE_PAGE', payload: 'simulator' });
   };
+  const toggleTheme = () => dispatch({ type: 'SET_THEME', payload: isDark ? 'light' : 'dark' });
+  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const openExperimentLab = () => {
-    dispatch({ type: 'SET_EXPERIMENT_MODAL', payload: true });
-  };
+  const cur = ref.metrics.current;
+  const ph = ref.metrics.inPhase;
 
-  const openTheory = () => {
-    dispatch({ type: 'SET_MODAL', payload: { modal: 'showTheoryModal', open: true } });
-  };
+  // El campo alterna solo entre las dos configuraciones; con movimiento reducido se queda en el cardioide
+  const [cardioid, setCardioid] = useState(prefersReducedMotion);
+  const arValueRef = useRef(null);
+  const tauValueRef = useRef(null);
+  const qpeValueRef = useRef(null);
 
-  const objectives = [
-    {
-      num: 1,
-      title: 'Condición de no-cancelación',
-      desc: 'Demostrar que dos subwoofers en fase suman sin nulos laterales si la separación d < λ/2.',
-      math: 'd < \\frac{\\lambda}{2} \\implies \\text{sin cancelación}',
-      tag: 'Teoría y Avisos',
-    },
-    {
-      num: 2,
-      title: 'Máximos, mínimos y sillas con Hessiano',
-      desc: 'Clasificar la topología del campo de energía acústica E(x, y) donde ∇E = 0 usando el determinante D.',
-      math: 'D = E_{xx}E_{yy} - E_{xy}^2 \\quad (D < 0 \\implies \\text{Silla})',
-      tag: 'Cálculo Analítico',
-    },
-    {
-      num: 3,
-      title: 'Redistribución de energía e integral doble',
-      desc: 'Comprobar que la interferencia no destruye energía sino que la redistribuye según la función de Bessel J₀.',
-      math: '\\rho = \\frac{\\iint E \\, dA}{\\iint \\Sigma E_i \\, dA} \\approx 1 + J_0(kd)',
-      tag: 'Integrales Dobles',
-    },
-    {
-      num: 4,
-      title: 'Optimización frente/atrás (Lagrange)',
-      desc: 'Maximizar la energía hacia el público sujeto a la anulación exacta hacia el escenario (ωτ = kd).',
-      math: 'd^* = \\frac{\\lambda}{4}, \\quad \\tau^* = \\frac{d^*}{c} = \\frac{1}{4f}',
-      tag: 'Optimización',
-    },
-    {
-      num: 5,
-      title: 'Cuantificación de atenuación trasera',
-      desc: 'Medir la reducción en decibelios (A_R ≈ 25.4 dB a 10m) y el cociente público/escenario Q_PE.',
-      math: 'A_R = 20\\log_{10}\\left(\\frac{|P(+R, 0)|}{|P(-R, 0)|}\\right)',
-      tag: 'Métricas Acústicas',
-    },
-    {
-      num: 6,
-      title: 'Sensibilidad ante errores de retardo',
-      desc: 'Determinar la tolerancia en milisegundos y centímetros antes de que la cancelación caiga por debajo de 10 dB.',
-      math: '\\Delta \\phi = \\omega \\cdot \\Delta \\tau, \\quad \\frac{\\partial A_R}{\\partial \\tau}',
-      tag: 'Sensibilidad',
-    },
-  ];
+  useEffect(() => {
+    if (prefersReducedMotion()) return undefined;
+    let timer;
+    const flip = () => {
+      setCardioid((value) => !value);
+      timer = setTimeout(flip, MODE_HOLD_MS);
+    };
+    timer = setTimeout(flip, INTRO_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const team = [
-    {
-      name: 'Cielo Ochoa',
-      role: 'Identidad Visual & Co-Investigadora',
-      highlight: 'Diseño del Logo Oficial & Modelado Conceptual',
-      bio: 'Lideró la concepción visual de BONAIS, la creación del logo icónico del pingüino acústico y la estructuración estética y pedagógica del proyecto.',
-    },
-    {
-      name: 'Daniel Angulo',
-      role: 'Desarrollo de Software & Arquitectura',
-      highlight: 'Motor de Simulación & Renderizado Espacial',
-      bio: 'Diseñó la arquitectura de la aplicación en React/Vite, algoritmos numéricos de diferencias centrales, Marching Squares para isolíneas y optimización de 60 FPS.',
-    },
-    {
-      name: 'Jerónimo Gómez',
-      role: 'Análisis Matemático & Cálculo III',
-      highlight: 'Deducciones Analíticas, Integrales & Hessiano',
-      bio: 'Estructuró las formulaciones de cálculo multivariable, demostraciones analíticas del gradiente, clasificación de puntos críticos y validación de Bessel.',
-    },
+  // Se escribe directo en el DOM: cambia en cada cuadro durante la transición, sin re-renderizar la página
+  const handleMix = useCallback((mix) => {
+    const sources = morphSources(ref.d, mix);
+    const { arDB } = calculateAR(sources, ref.k, 10);
+    const { qpeDB } = calculateQPE({ precomputedSources: sources, k: ref.k, n: 48 });
+    if (arValueRef.current) arValueRef.current.textContent = `${fmt(arDB)} dB`;
+    if (tauValueRef.current) tauValueRef.current.textContent = `${fmt(ref.tau * 1000 * mix, 2)} ms`;
+    if (qpeValueRef.current) qpeValueRef.current.textContent = `${fmt(qpeDB)} dB`;
+  }, [ref]);
+
+  const specs = [
+    { value: `${fmt(cur.arDB)} dB`, valueRef: arValueRef, label: 'menos energía detrás del arreglo, a 10 m' },
+    { value: `${fmt(ref.d, 2)} m`, label: 'separación óptima d = λ/4 a 80 Hz' },
+    { value: `${fmt(ref.tau * 1000, 2)} ms`, valueRef: tauValueRef, label: 'retardo de la caja trasera' },
+    { value: `${fmt(cur.qpeDB)} dB`, valueRef: qpeValueRef, label: 'más energía en el público que en el escenario' },
   ];
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-bg text-text select-none overflow-x-hidden">
-      {/* ═══ NAVBAR SUPERIOR ═══ */}
-      <nav className="sticky top-0 z-40 px-4 py-2.5 glass-strong border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img
-            src={isDark ? '/logo-dark.png' : '/logo-light.png'}
-            alt="BONAIS"
-            className="h-8 w-8 rounded-lg object-contain shadow-sm"
-          />
-          <div className="flex flex-col">
-            <span className="text-sm font-extrabold tracking-tight text-text">BONAIS</span>
-            <span className="text-[9px] text-muted font-mono leading-none">Cálculo III · Ingeniería de Sonido</span>
+    <div className="landing min-h-screen w-full bg-bg text-text overflow-x-hidden">
+      {/* ═══ Navegación (cristal) ═══ */}
+      <header className="fixed top-3 inset-x-0 z-50 flex justify-center px-3">
+        <nav className="landing-glass w-full max-w-5xl rounded-full pl-3 pr-1.5 py-1.5 flex items-center gap-3">
+          <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2 pr-2">
+            <img src={isDark ? '/logo-dark.png' : '/favicon.png'} alt="BONAIS" className="h-7 w-7 rounded-full object-contain" />
+            <span className="text-[15px] font-semibold tracking-tight text-text">BONAIS</span>
+          </button>
+          <div className="hidden md:flex items-center gap-1 ml-2">
+            {[
+              ['problema', 'Problema'],
+              ['modelo', 'Modelo'],
+              ['objetivos', 'Objetivos'],
+              ['equipo', 'Equipo'],
+            ].map(([id, label]) => (
+              <button key={id} type="button" onClick={() => scrollTo(id)}
+                className="px-3 py-1.5 rounded-full text-[13px] text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-1">
+            <button type="button" onClick={toggleTheme} title="Cambiar tema"
+              className="h-8 w-8 grid place-items-center rounded-full text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={goToSimulator}
+              className={`rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
+                isDark
+                  ? 'bg-white text-[#0B0712] hover:bg-white/90'
+                  : 'bg-[#0B0712] text-white hover:bg-[#0B0712]/85'
+              }`}>
+              Abrir simulador
+            </button>
+          </div>
+        </nav>
+      </header>
+
+      {/* ═══ Hero: el campo real del cardioide, animado ═══ */}
+      <section className={`relative flex flex-col min-h-[100svh] lg:h-[100svh] lg:min-h-[620px] w-full overflow-hidden transition-colors duration-300 ${
+        isDark ? 'bg-black text-white' : 'bg-white text-[#0B0712]'
+      }`}>
+        {/* Zona sensible: solo sobre el gráfico, para que pasar por el texto no lo active */}
+        <div className="hero-hit absolute inset-0 lg:left-[52%] z-[5]" aria-hidden="true" />
+        <WaveHero
+          theme={state.theme}
+          c={ref.c}
+          frequency={ref.f}
+          cardioid={cardioid}
+          onMix={handleMix}
+          className="hero-field absolute inset-0 h-full w-full"
+        />
+        {/* Velos: el texto vive en la zona silenciosa y la ficha sobre un fondo limpio */}
+        <div className={`absolute inset-x-0 top-[280px] bottom-0 lg:top-auto lg:h-1/3 pointer-events-none bg-gradient-to-t ${
+          isDark ? 'from-black via-black/90 lg:via-black/40 to-transparent' : 'from-white via-white/90 lg:via-white/40 to-transparent'
+        }`} />
+        <div className={`absolute inset-y-0 left-0 w-3/5 hidden lg:block pointer-events-none bg-gradient-to-r ${
+          isDark ? 'from-black/85 via-black/50 to-transparent' : 'from-white/90 via-white/60 to-transparent'
+        }`} />
+
+        <div className="relative z-10 w-full lg:h-full max-w-6xl mx-auto px-5 sm:px-8 flex flex-col lg:justify-center pt-[335px] pb-8 lg:pb-[130px] lg:pt-16 pointer-events-none">
+          <p className="text-[13px] text-muted mb-4">Proyecto de aula · Cálculo III · Ingeniería de Sonido</p>
+          <h1 className="landing-display">
+            El grave,<br />hacia el público.
+          </h1>
+          <p className="mt-5 max-w-md xl:max-w-lg text-[16px] sm:text-[17px] leading-relaxed text-muted">
+            BONAIS modela dos subwoofers como una función de varias variables y encuentra la separación y el retardo
+            que llevan la energía al público y la quitan del escenario.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3 pointer-events-auto">
+            <button type="button" onClick={goToSimulator}
+              className="group inline-flex items-center gap-2 rounded-full bg-[#7C3AED] hover:bg-[#8B5CF6] px-6 py-3 text-[15px] font-semibold text-white shadow-[0_8px_40px_-8px_rgba(124,58,237,0.8)] transition-colors">
+              Abrir simulador
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
+            <button type="button" onClick={() => scrollTo('modelo')}
+              className="landing-glass rounded-full px-6 py-3 text-[15px] font-medium text-text hover:bg-black/5 dark:hover:bg-white/15 transition-colors">
+              Ver el modelo
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={openExperimentLab}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-purple-dark dark:text-purple-light bg-purple/15 hover:bg-purple/25 border border-purple/30 transition-all"
-          >
-            <FlaskConical className="h-3.5 w-3.5" />
-            <span>Laboratorio de Fórmulas</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={openTheory}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-muted hover:text-text hover:bg-surface-2 transition-all"
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Teoría</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="p-2 rounded-xl text-muted hover:text-text hover:bg-surface-2 transition-colors"
-            title="Cambiar tema"
-          >
-            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={goToSimulator}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-purple hover:bg-purple-dark shadow-md shadow-purple/20 transition-all"
-          >
-            <span>Ir al Simulador</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </nav>
-
-      {/* ═══ HERO SECTION ═══ */}
-      <section className="relative px-4 py-12 md:py-20 flex flex-col items-center text-center max-w-5xl mx-auto">
-        {/* Glow ambient background */}
-        <div className="absolute top-1/3 -translate-y-1/2 w-96 h-96 bg-purple/15 rounded-full blur-3xl pointer-events-none -z-10" />
-
-        {/* LOGO EN GRANDE CON CRÉDITOS */}
-        <div className="relative mb-6 group">
-          <div className="relative p-2 rounded-3xl bg-surface-2/80 border border-border shadow-2xl backdrop-blur-md">
-            <img
-              src="/logo-original.png"
-              alt="Logo oficial BONAIS"
-              className="h-28 w-28 sm:h-36 sm:w-36 rounded-2xl object-contain drop-shadow-lg transition-transform duration-300 group-hover:scale-105"
-            />
-          </div>
-          <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-purple/20 border border-purple/35 text-purple-dark dark:text-purple-light text-[10px] font-semibold px-3 py-0.5 rounded-full shadow-sm backdrop-blur-md">
-            🎨 Logo Oficial: Cielo Ochoa
-          </span>
-        </div>
-
-        {/* BADGES HEADER */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-4 mt-2">
-          <span className="text-[10px] font-bold text-purple-dark dark:text-purple-light bg-purple/15 border border-purple/30 px-3 py-1 rounded-full uppercase tracking-wider">
-            Proyecto de Aula · Cálculo III
-          </span>
-          <span className="text-[10px] font-semibold text-muted bg-surface-2 border border-border px-3 py-1 rounded-full">
-            Ingeniería de Sonido
-          </span>
-        </div>
-
-        {/* TÍTULO PRINCIPAL */}
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-text max-w-4xl leading-tight">
-          Diseño y Optimización de <br className="hidden sm:block" />
-          <span className="bg-gradient-to-r from-purple-dark via-purple to-pink-500 bg-clip-text text-transparent">
-            Arreglos Cardioides de Subwoofers
-          </span>
-        </h1>
-
-        {/* DESCRIPCIÓN CONTEXTUAL */}
-        <p className="mt-5 text-sm sm:text-base text-muted max-w-2xl leading-relaxed">
-          En sonido en vivo, los subwoofers radian en todas direcciones causando contaminación acústica en el escenario.
-          <strong className="text-text font-semibold"> BONAIS</strong> demuestra cómo el
-          <strong className="text-purple-dark dark:text-purple-light font-semibold"> Cálculo de Varias Variables </strong>
-          resuelve este desafío mediante separación espacial, retardo de fase e interferencia destructiva controlada.
-        </p>
-
-        {/* BOTONES DE ACCIÓN PRINCIPAL */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={goToSimulator}
-            className="flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold text-white bg-purple hover:bg-purple-dark shadow-xl shadow-purple/25 hover:shadow-purple/40 hover:-translate-y-0.5 transition-all"
-          >
-            <Sliders className="h-4 w-4" />
-            <span>Abrir Simulador y Dashboard</span>
-            <ArrowRight className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={openExperimentLab}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold text-text bg-surface-2 hover:bg-surface border border-border hover:border-purple/40 shadow-sm transition-all"
-          >
-            <FlaskConical className="h-4 w-4 text-purple-dark dark:text-purple-light" />
-            <span>Laboratorio de Fórmulas en Vivo</span>
-          </button>
-        </div>
-
-        {/* STATS RÁPIDOS */}
-        <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-3xl">
-          <div className="p-3.5 rounded-2xl bg-surface-2/60 border border-border">
-            <span className="text-[10px] text-muted font-medium block">Atenuación Escenario</span>
-            <span className="text-xl font-bold font-mono text-purple-dark dark:text-purple-light">25,4 dB</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-surface-2/60 border border-border">
-            <span className="text-[10px] text-muted font-medium block">Separación Óptima</span>
-            <span className="text-xl font-bold font-mono text-text">d = λ/4</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-surface-2/60 border border-border">
-            <span className="text-[10px] text-muted font-medium block">Retardo Teórico</span>
-            <span className="text-xl font-bold font-mono text-text">τ = d/c</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-surface-2/60 border border-border">
-            <span className="text-[10px] text-muted font-medium block">Banda Principal</span>
-            <span className="text-xl font-bold font-mono text-text">40 – 100 Hz</span>
-          </div>
+        {/* Ficha técnica (cristal) */}
+        <div className="relative lg:absolute lg:bottom-5 lg:inset-x-0 mt-auto z-10 px-3 sm:px-8 pb-5 lg:pb-0">
+          <dl className="landing-glass mx-auto max-w-6xl rounded-3xl grid grid-cols-2 lg:grid-cols-4 divide-border lg:divide-x">
+            {specs.map((s) => (
+              <div key={s.label} className="px-5 py-4">
+                <dt className="sr-only">{s.label}</dt>
+                <dd ref={s.valueRef} className="text-[22px] sm:text-[26px] font-light tracking-tight tabular-nums text-text">{s.value}</dd>
+                <dd className="text-[11.5px] leading-snug text-muted mt-0.5">{s.label}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
-      {/* ═══ CONTEXTO Y QUÉ RESUELVE EL PROYECTO ═══ */}
-      <section className="px-4 py-12 bg-surface/50 border-y border-border">
-        <div className="max-w-5xl mx-auto flex flex-col gap-8">
-          <div className="text-center max-w-2xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-text tracking-tight">
-              ¿Qué problema real resuelve BONAIS?
-            </h2>
-            <p className="mt-2 text-xs sm:text-sm text-muted">
-              Un puente directo entre la física acústica de bajas frecuencias y los métodos rigurosos de Cálculo III.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-5 rounded-2xl bg-surface-2 border border-border flex flex-col gap-3">
-              <div className="h-9 w-9 rounded-xl bg-warm/15 text-warm flex items-center justify-center">
-                <Waves className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold text-text">1. El Problema: Graves Omnidireccionales</h3>
-              <p className="text-xs text-muted leading-relaxed">
-                A 40–100 Hz las ondas sonoras miden entre 3,4 y 8,6 metros. Al ser tan largas comparadas con la caja, el subwoofer radia casi idéntico en todas las direcciones. Toda esa energía inunda el escenario, satura los micrófonos y aturde a los músicos.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-surface-2 border border-border flex flex-col gap-3">
-              <div className="h-9 w-9 rounded-xl bg-purple/15 text-purple-dark dark:text-purple-light flex items-center justify-center">
-                <Music className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold text-text">2. La Solución: Arreglo Cardioide</h3>
-              <p className="text-xs text-muted leading-relaxed">
-                Colocando dos subwoofers en fila separados una distancia d = λ/4, retrasando la caja trasera un tiempo τ = d/c e invirtiendo su polaridad (−180°), las ondas llegan exactamente en fase hacia el público y en contrafase hacia el escenario, logrando silencio atrás.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-surface-2 border border-border flex flex-col gap-3">
-              <div className="h-9 w-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center">
-                <Cpu className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold text-text">3. El Núcleo: Cálculo Multivariable</h3>
-              <p className="text-xs text-muted leading-relaxed">
-                BONAIS no usa "recetas a ojo". Todo resultado es deducible a mano: funciones de dos variables E(x, y), gradiente ∇E para saber dónde aumenta el sonido, puntos de silla mediante la matriz Hessiana e integrales dobles para cuantificar la energía total.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ OBJETIVOS DEL PROYECTO DE AULA ═══ */}
-      <section className="px-4 py-14 max-w-5xl mx-auto w-full">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-          <div>
-            <span className="text-[10px] font-bold text-purple-dark dark:text-purple-light uppercase tracking-wider font-mono">
-              Proyecto de Aula
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-text tracking-tight mt-1">
-              Objetivos Específicos & Respuestas del Sistema
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={openExperimentLab}
-            className="self-start md:self-auto flex items-center gap-1.5 text-xs font-semibold text-purple-dark dark:text-purple-light hover:underline"
-          >
-            <span>Verificar números en Laboratorio de Fórmulas</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
+      {/* ═══ Problema ═══ */}
+      <section id="problema" className="scroll-mt-20 max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32">
+        <div className="max-w-3xl">
+          <h2 className="landing-h2">Un subwoofer suena igual hacia todos lados.</h2>
+          <p className="mt-5 text-[16px] sm:text-[17px] leading-relaxed text-muted">
+            Entre 40 y 100 Hz la onda mide de 3,4 a 8,6 metros, mucho más que la caja. Por eso el grave llega al
+            escenario con la misma fuerza que al público. Invertir la polaridad de una caja y retrasarla un tiempo
+            exacto cambia eso: las ondas se cancelan atrás y se suman adelante.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {objectives.map((obj) => (
-            <div
-              key={obj.num}
-              className="p-4 rounded-2xl bg-surface-2 border border-border flex flex-col justify-between gap-3 hover:border-purple/30 transition-colors"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple/15 text-purple-dark dark:text-purple-light font-bold text-[10px]">
-                      {obj.num}
-                    </span>
-                    <h3 className="text-xs font-bold text-text">{obj.title}</h3>
-                  </div>
-                  <span className="text-[9px] font-semibold text-muted bg-surface px-2 py-0.5 rounded-md border border-border">
-                    {obj.tag}
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted leading-relaxed mb-2.5">
-                  {obj.desc}
-                </p>
-              </div>
-              <div className="p-2 rounded-xl bg-surface border border-border/80 font-mono text-[10px] text-purple-dark dark:text-purple-light flex items-center justify-between">
-                <span>{obj.math}</span>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 opacity-80" />
-              </div>
-            </div>
+        <div className="mt-14 grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[
+            { title: 'Dos subwoofers en fase', src: ref.inPhase, q: ph.qpeDB, note: 'El escenario recibe tanta energía como el público.' },
+            { title: 'Arreglo cardioide', src: ref.cardioid, q: cur.qpeDB, note: 'Caja trasera invertida y retrasada τ = d/c.' },
+          ].map((item) => (
+            <figure key={item.title} className="flex flex-col gap-4">
+              <FieldThumb
+                precomputedSources={item.src}
+                k={ref.k}
+                audienceRegion={DEFAULT_AUDIENCE_REGION}
+                stageRegion={DEFAULT_STAGE_REGION}
+                label={`Mapa de nivel sonoro: ${item.title}`}
+              />
+              <figcaption className="flex items-end justify-between gap-4">
+                <span>
+                  <span className="block text-[17px] font-medium text-text">{item.title}</span>
+                  <span className="block text-[13px] text-muted mt-0.5">{item.note}</span>
+                </span>
+                <span className="text-right flex-shrink-0">
+                  <span className="block text-[26px] font-light tabular-nums tracking-tight text-text">{fmt(item.q)} dB</span>
+                  <span className="block text-[11px] text-muted">público / escenario</span>
+                </span>
+              </figcaption>
+            </figure>
           ))}
         </div>
+        <p className="mt-6 text-[12px] text-muted">
+          80 Hz, d = {fmt(ref.d, 2)} m. Zonas punteadas: <span className="text-[#C084FC]">público</span> y{' '}
+          <span className="text-[#FB7185]">escenario</span>, 12 × 16 m cada una.
+        </p>
       </section>
 
-      {/* ═══ EQUIPO DE TRABAJO (CRÉDITOS OFICIALES) ═══ */}
-      <section className="px-4 py-14 bg-surface-2/60 border-t border-border">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center max-w-xl mx-auto mb-10">
-            <span className="text-[10px] font-bold text-purple-dark dark:text-purple-light uppercase tracking-wider font-mono">
-              Autores & Desarrolladores
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-text tracking-tight mt-1">
-              Equipo de Investigación y Creación
-            </h2>
-            <p className="text-xs text-muted mt-1.5">
-              Estudiantes de Ingeniería de Sonido para el curso de Cálculo III.
+      {/* ═══ Modelo ═══ */}
+      <section id="modelo" className="scroll-mt-20 border-t border-border">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32">
+          <h2 className="landing-h2 max-w-3xl">Tres ecuaciones, un diseño.</h2>
+          <p className="mt-5 max-w-2xl text-[16px] sm:text-[17px] leading-relaxed text-muted">
+            El simulador sigue el mismo orden del documento. Cada valor que ves en pantalla sale de estas expresiones,
+            y el panel <span className="text-text">Modelo en vivo</span> las muestra con los números actuales.
+          </p>
+
+          <ol className="mt-14 flex flex-col">
+            {EQUATIONS.map((eq, i) => (
+              <li key={eq.title} className="grid grid-cols-1 lg:grid-cols-[56px_1fr_1fr] gap-4 lg:gap-8 py-10 border-t border-border first:border-t-0">
+                <span className="text-[13px] text-muted tabular-nums pt-1">0{i + 1}</span>
+                <div className="landing-eq overflow-x-auto custom-scrollbar text-text">
+                  <KaTeXMath math={eq.math} block />
+                </div>
+                <div>
+                  <h3 className="text-[19px] font-medium text-text leading-snug">{eq.title}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted">{eq.text}</p>
+                  <p className="mt-3 text-[12px] text-purple-dark dark:text-purple-light">{eq.ref}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* ═══ Objetivos ═══ */}
+      <section id="objetivos" className="scroll-mt-20 border-t border-border">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+          <div>
+            <p className="text-[13px] text-muted mb-4">Objetivo general</p>
+            <p className="text-[26px] sm:text-[32px] font-light leading-[1.2] tracking-tight text-text">
+              Determinar la separación y el retardo óptimos entre dos subwoofers idénticos que dirigen los graves hacia
+              el público y los reducen hacia el escenario, entre 40 y 100 Hz.
             </p>
           </div>
+          <div>
+            <p className="text-[13px] text-muted mb-4">Objetivos específicos</p>
+            <ul className="flex flex-col">
+              {SPECIFIC_OBJECTIVES.map((o) => (
+                <li key={o.verb} className="py-5 border-t border-border first:border-t-0 first:pt-0 text-[16px] leading-relaxed text-muted">
+                  <span className="text-text font-medium">{o.verb}</span> {o.rest}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {team.map((member) => (
-              <div
-                key={member.name}
-                className="p-5 rounded-2xl bg-surface border border-border shadow-sm flex flex-col justify-between gap-4"
-              >
-                <div>
-                  <div className="h-10 w-10 rounded-xl bg-purple/15 text-purple-dark dark:text-purple-light flex items-center justify-center font-bold text-sm mb-3">
-                    {member.name.charAt(0)}
-                  </div>
-                  <h3 className="text-sm font-bold text-text">{member.name}</h3>
-                  <span className="text-[10px] font-semibold text-purple-dark dark:text-purple-light block mt-0.5">
-                    {member.role}
-                  </span>
-                  <div className="my-2 h-px bg-border" />
-                  <span className="inline-block text-[9px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full mb-2">
-                    {member.highlight}
-                  </span>
-                  <p className="text-[11px] text-muted leading-relaxed">
-                    {member.bio}
-                  </p>
-                </div>
+      {/* ═══ Equipo ═══ */}
+      <section id="equipo" className="scroll-mt-20 border-t border-border">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-28">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+            <h2 className="landing-h2">Equipo</h2>
+            <p className="text-[14px] text-muted max-w-sm">
+              Estudiantes de Ingeniería de Sonido · Universidad de San Buenaventura Medellín · Semestre 2026-2.
+            </p>
+          </div>
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {TEAM.map((m) => (
+              <div key={m.name} className="rounded-3xl border border-border bg-surface-2 p-6">
+                <p className="text-[19px] font-medium text-text">{m.name}</p>
+                <p className="mt-2 text-[14px] leading-relaxed text-muted">{m.role}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══ FOOTER OFICIAL CON NOMBRES ═══ */}
-      <footer className="px-4 py-8 bg-bg border-t border-border text-center text-xs text-muted">
-        <div className="max-w-4xl mx-auto flex flex-col items-center gap-3">
-          <div className="flex items-center gap-2 font-semibold text-text">
-            <img src="/logo-original.png" alt="BONAIS" className="h-5 w-5 rounded object-contain" />
-            <span>BONAIS — Proyecto de Aula de Cálculo III</span>
-          </div>
+      {/* ═══ Cierre ═══ */}
+      <section className="relative overflow-hidden border-t border-border">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32 flex flex-col items-start gap-8">
+          <h2 className="landing-h2 max-w-2xl">Mueve la separación. Mira cómo cambian las integrales.</h2>
+          <button type="button" onClick={goToSimulator}
+            className="group inline-flex items-center gap-2 rounded-full bg-[#7C3AED] hover:bg-[#8B5CF6] px-6 py-3 text-[15px] font-semibold text-white transition-colors">
+            Abrir simulador
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
+      </section>
 
-          <p className="text-[11px] text-muted">
-            Integrantes: <strong className="text-text font-semibold">Cielo Ochoa</strong> - <strong className="text-text font-semibold">Daniel Angulo</strong> — <strong className="text-text font-semibold">Jerónimo Gómez</strong>
-          </p>
-
-          <p className="text-[10px] text-muted opacity-75">
-            Ingeniería de Sonido · Cálculo de Varias Variables · 2026
-          </p>
-
-          <div className="mt-2 flex items-center gap-3 text-[11px]">
-            <button
-              type="button"
-              onClick={goToSimulator}
-              className="text-purple-dark dark:text-purple-light font-semibold hover:underline"
-            >
-              Ir al Simulador
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={openExperimentLab}
-              className="hover:text-text transition-colors"
-            >
-              Laboratorio de Fórmulas
-            </button>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={openTheory}
-              className="hover:text-text transition-colors"
-            >
-              Fundamentos Teóricos
-            </button>
-          </div>
+      <footer className="border-t border-border">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row gap-3 justify-between text-[12px] text-muted">
+          <span>BONAIS · Optimización de arreglos de subwoofers con funciones de varias variables</span>
+          <span>Logo: Cielo Ochoa</span>
         </div>
       </footer>
     </div>

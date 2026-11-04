@@ -5,7 +5,6 @@ import Header from './components/Header.jsx';
 import ControlPanel from './components/ControlPanel.jsx';
 import FieldMap from './components/FieldMap.jsx';
 import PolarPlot from './components/PolarPlot.jsx';
-import ResultCards from './components/ResultCards.jsx';
 import CalculusPanel from './components/panels/CalculusPanel.jsx';
 import OptimizationPanel from './components/panels/OptimizationPanel.jsx';
 import SensitivityPanel from './components/panels/SensitivityPanel.jsx';
@@ -15,7 +14,8 @@ import TheoryModal from './components/TheoryModal.jsx';
 import CompareModal from './components/CompareModal.jsx';
 import ExportModal from './components/ExportModal.jsx';
 import ExperimentLabModal from './components/ExperimentLabModal.jsx';
-import { Calculator, Sparkles, Activity, Radio, BookOpen, ChevronDown, SlidersHorizontal, BarChart3 } from 'lucide-react';
+import LiveModelPanel from './components/LiveModelPanel.jsx';
+import { Calculator, Sparkles, Activity, Radio, BookOpen, ChevronDown } from 'lucide-react';
 
 const MemoCalculusPanel = React.memo(CalculusPanel);
 const MemoOptimizationPanel = React.memo(OptimizationPanel);
@@ -40,28 +40,32 @@ function MainLayout() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-bg text-text select-none">
-      {/* ═══ TOP HEADER BAR ═══ */}
-      <div className="px-3 pt-2.5 pb-1 flex-shrink-0 flex justify-center z-30">
+      {/* ═══ TOP FLOATING PILL NAV (Idéntica estética a la Landing) ═══ */}
+      <header className="px-3 pt-3 pb-1.5 flex-shrink-0 flex justify-center z-30">
         <Header panelOpen={panelOpen} setPanelOpen={setPanelOpen} />
-      </div>
+      </header>
 
-      {/* ═══ MAIN WORKSPACE (COHERENT 3-COLUMN DOCKED LAYOUT) ═══ */}
-      <div className="flex-1 flex overflow-hidden px-3 pb-1 pt-1 gap-2.5 relative">
-        {/* LEFT COLUMN: Controls & Acoustic Setup */}
+      {/* ═══ MAIN WORKSPACE (STARLINK / TESLA 3-COLUMN HUD) ═══ */}
+      <div className="flex-1 flex overflow-hidden px-3 pb-3 pt-1 gap-3 relative min-h-0">
+        {/* LEFT COLUMN: Parámetros del Arreglo */}
         {!isFullscreen && (
-          <aside className="w-[280px] self-start max-h-full flex-shrink-0 flex flex-col glass-strong rounded-2xl border border-border shadow-sm overflow-hidden animate-fade-in">
-            <div className="px-3 py-2 border-b border-border text-[11px] font-semibold text-text flex items-center gap-1.5 flex-shrink-0">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-purple-dark dark:text-purple-light" />
-              <span>Controles del Arreglo</span>
+          <aside className="w-[272px] xl:w-[288px] h-full flex-shrink-0 flex flex-col sim-panel rounded-3xl overflow-hidden animate-fade-in">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
+              <span className="text-[12px] font-medium tracking-tight text-text">Parámetros del arreglo</span>
+              <span className="text-[10px] text-muted uppercase tracking-wider">{state.preset === 'cardioid' ? 'Cardioide' : state.preset === 'in_phase' ? 'En fase' : 'Manual'}</span>
             </div>
-            <div className="overflow-y-auto custom-scrollbar p-3">
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
               <ControlPanel />
+            </div>
+            <div className="px-4 py-2.5 border-t border-border text-[10px] text-muted flex items-center justify-between flex-shrink-0">
+              <span>C. Ochoa · D. Angulo · J. Gómez</span>
+              <span className="opacity-60">Cálculo III</span>
             </div>
           </aside>
         )}
 
-        {/* CENTER COLUMN: Central Viewport Workspace */}
-        <main className="flex-1 flex flex-col glass-strong rounded-2xl border border-border shadow-sm overflow-hidden relative">
+        {/* CENTER COLUMN: Full-bleed Acoustic Canvas */}
+        <main className="flex-1 flex flex-col rounded-3xl border border-border shadow-2xl overflow-hidden relative min-w-0 bg-white dark:bg-black">
           {state.viewMode === 'polar' ? (
             <PolarPlot />
           ) : state.viewMode === 'dual' ? (
@@ -77,10 +81,10 @@ function MainLayout() {
             <FieldMap />
           )}
 
-          {/* Expandable Technical Analysis Drawer */}
+          {/* Expandable Technical Charts Drawer */}
           {panelOpen && (
-            <div className="absolute bottom-0 inset-x-0 z-30 glass-strong border-t border-border shadow-2xl animate-slide-up flex flex-col" style={{ maxHeight: '45%' }}>
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-2 flex-shrink-0">
+            <div className="absolute bottom-3 inset-x-3 z-30 sim-panel rounded-3xl animate-slide-up flex flex-col overflow-hidden" style={{ maxHeight: '48%' }}>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border flex-shrink-0">
                 <div className="flex items-center gap-1 overflow-x-auto">
                   {tabs.map((t) => {
                     const Icon = t.icon;
@@ -90,10 +94,10 @@ function MainLayout() {
                         key={t.id}
                         type="button"
                         onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: t.id })}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all ${
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] whitespace-nowrap transition-all ${
                           isActive
-                            ? 'bg-purple/15 dark:bg-purple/25 text-purple-dark dark:text-purple-light shadow-sm font-semibold border border-purple/30'
-                            : 'text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/5'
+                            ? 'bg-white text-[#0B0712] font-medium shadow-sm'
+                            : 'text-muted hover:text-text'
                         }`}
                       >
                         <Icon className="h-3 w-3" />
@@ -105,9 +109,9 @@ function MainLayout() {
                 <button
                   type="button"
                   onClick={() => setPanelOpen(false)}
-                  className="p-1 text-muted hover:text-text rounded-md"
+                  className="h-7 w-7 grid place-items-center text-muted hover:text-text rounded-full hover:bg-white/10 transition-colors"
                 >
-                  <ChevronDown className="h-3.5 w-3.5" />
+                  <ChevronDown className="h-4 w-4" />
                 </button>
               </div>
 
@@ -122,36 +126,15 @@ function MainLayout() {
           )}
         </main>
 
-        {/* RIGHT COLUMN: KPI Metrics & Result Cards */}
+        {/* RIGHT COLUMN: Telemetría y Modelo Matemático Unificado */}
         {!isFullscreen && (
-          <aside className="w-[230px] self-start max-h-full flex-shrink-0 flex flex-col glass-strong rounded-2xl border border-border shadow-sm overflow-hidden animate-fade-in">
-            <div className="px-3 py-2 border-b border-border text-[11px] font-semibold text-text flex items-center gap-1.5 flex-shrink-0">
-              <BarChart3 className="h-3.5 w-3.5 text-purple-dark dark:text-purple-light" />
-              <span>Resultados Acústicos</span>
-            </div>
-            <div className="overflow-y-auto custom-scrollbar p-3">
-              <ResultCards />
+          <aside className="w-[360px] xl:w-[410px] h-full flex-shrink-0 flex flex-col sim-panel rounded-3xl overflow-hidden animate-fade-in">
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+              <LiveModelPanel />
             </div>
           </aside>
         )}
       </div>
-
-      {/* ═══ FOOTER PERSISTENTE DEL SIMULADOR CON INTEGRANTES ═══ */}
-      <footer className="px-4 py-1.5 border-t border-border bg-surface-2/80 flex-shrink-0 flex flex-wrap items-center justify-between text-[10px] text-muted z-20">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-text">BONAIS</span>
-          <span>·</span>
-          <span>Proyecto de Aula · Cálculo III (Ingeniería de Sonido)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span>Integrantes:</span>
-          <strong className="text-text font-semibold">Cielo Ochoa</strong> (Autora del Logo)
-          <span>—</span>
-          <strong className="text-text font-semibold">Daniel Angulo</strong>
-          <span>—</span>
-          <strong className="text-text font-semibold">Jerónimo "Por Partes" Gómez</strong>
-        </div>
-      </footer>
 
       {/* Print content */}
       <div className="hidden print-only p-8 text-black bg-white">

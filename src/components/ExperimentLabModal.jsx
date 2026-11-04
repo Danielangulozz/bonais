@@ -16,12 +16,18 @@ import {
   CartesianGrid, Tooltip, ReferenceLine, ReferenceDot
 } from 'recharts';
 
+// Los hooks del contenido solo se ejecutan cuando el modal está abierto
+// (antes el `return null` iba antes de los useMemo y rompía las reglas de los hooks).
 export default function ExperimentLabModal() {
+  const state = useArrayState();
+  if (!state.showExperimentModal) return null;
+  return <ExperimentLabContent />;
+}
+
+function ExperimentLabContent() {
   const state = useArrayState();
   const dispatch = useArrayDispatch();
   const derived = useArrayDerived();
-
-  if (!state.showExperimentModal) return null;
 
   const closeModal = () => {
     dispatch({ type: 'SET_EXPERIMENT_MODAL', payload: false });
