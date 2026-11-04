@@ -164,7 +164,7 @@ export default React.memo(function FieldMap() {
     });
 
     if (isContoursMode) {
-      ctx.fillStyle = isDark ? '#090B14' : '#F8FAFC';
+      ctx.fillStyle = isDark ? '#000000' : '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
     } else {
       if (!offscreenCanvasRef.current) {
@@ -264,10 +264,38 @@ export default React.memo(function FieldMap() {
         ctx.lineWidth = 1;
         ctx.fillRect(tl.cx, tl.cy, br.cx - tl.cx, br.cy - tl.cy);
         ctx.strokeRect(tl.cx, tl.cy, br.cx - tl.cx, br.cy - tl.cy);
+        // Malla de la suma de Riemann (punto medio) usada por ∬ E dA
+        if (state.layers.integrationMesh) {
+          const nMesh = 12;
+          const cw = (br.cx - tl.cx) / nMesh;
+          const ch = (br.cy - tl.cy) / nMesh;
+          ctx.save();
+          ctx.strokeStyle = stroke;
+          ctx.globalAlpha = 0.55;
+          ctx.lineWidth = 0.8;
+          for (let i = 1; i < nMesh; i++) {
+            ctx.beginPath(); ctx.moveTo(tl.cx + i * cw, tl.cy); ctx.lineTo(tl.cx + i * cw, br.cy); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(tl.cx, tl.cy + i * ch); ctx.lineTo(br.cx, tl.cy + i * ch); ctx.stroke();
+          }
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = labelColor;
+          if (cw > 6 && ch > 6) {
+            for (let j = 0; j < nMesh; j++) {
+              for (let i = 0; i < nMesh; i++) {
+                ctx.beginPath();
+                ctx.arc(tl.cx + (i + 0.5) * cw, tl.cy + (j + 0.5) * ch, 1.3, 0, 2 * Math.PI);
+                ctx.fill();
+              }
+            }
+          }
+          ctx.restore();
+        }
+
+        const areaM2 = (region.xMax - region.xMin) * (region.yMax - region.yMin);
         ctx.fillStyle = labelColor;
         ctx.font = '600 10px "IBM Plex Sans JP", sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(label, tl.cx + 6, tl.cy + 14);
+        ctx.fillText(`${label} · ${areaM2.toFixed(0)} m²`, tl.cx + 6, tl.cy + 14);
       });
     }
 
@@ -499,59 +527,63 @@ export default React.memo(function FieldMap() {
   const isReversedWarning = state.polarityRear === 1 && state.delayRear > 0;
 
   return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden select-none bg-[#090B14]">
-      {/* ═══ VIEWPORT TOP BAR: Fixed height h-8 (32px), NEVER expands or shrinks ═══ */}
-      <div className="h-8 min-h-[32px] max-h-[32px] flex items-center justify-between px-3 glass-strong border-b border-border text-[11px] z-10 flex-shrink-0 overflow-hidden">
-        <div className="flex items-center gap-2 font-mono">
-          <span className="font-semibold text-text">Campo 2D</span>
-          <span className="text-[10px] text-muted opacity-75">±{mapSpan.toFixed(0)}m</span>
-          <span className="text-[9px] text-muted hidden md:inline opacity-60">Escenario (−x) ◄───► Público (+x)</span>
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden select-none bg-white dark:bg-black">
+      {/* ═══ FULL-BLEED CANVAS VIEWPORT ═══ */}
+      <canvas
+        ref={canvasRef}
+        width={canvasSize.w}
+        height={canvasSize.h}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onPointerLeave={() => { if (!dragState) setHoverInfo(null); }}
+        className={`absolute inset-0 w-full h-full touch-none ${dragState?.moved ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+        aria-label="Mapa interactivo del campo acústico"
+      />
+
+      {/* ═══ FLOATING HUD TOP: Orientation & Cursor Telemetry ═══ */}
+      <div className="absolute top-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+        <div className="landing-glass rounded-full px-3.5 py-1.5 flex items-center gap-2.5 text-[11px] pointer-events-auto">
+          <span className="font-medium text-text">Campo 2D</span>
+          <span className="text-muted tabular-nums">±{mapSpan.toFixed(0)} m</span>
+          <span className="hidden md:inline-flex items-center gap-1.5 text-[10.5px] text-muted border-l border-border pl-2.5">
+            <span className="text-red dark:text-[#FB7185] font-medium">Escenario (−x)</span>
+            <span className="opacity-50">↔</span>
+            <span className="text-purple-dark dark:text-[#D8B4FE] font-medium">Público (+x)</span>
+          </span>
         </div>
 
-        {/* HUD readout */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pointer-events-auto">
           {hoverInfo ? (
-            <div className="flex items-center gap-2 font-mono text-[10px] bg-purple/10 border border-purple/25 text-purple-dark dark:text-purple-light px-2.5 py-0.5 rounded-full shadow-sm">
-              <span>x: {hoverInfo.x.toFixed(1)}m</span>
-              <span>y: {hoverInfo.y.toFixed(1)}m</span>
-              <strong className="font-bold">{hoverInfo.levelDB.toFixed(1)} dB</strong>
+            <div className="landing-glass rounded-full px-3.5 py-1.5 flex items-center gap-2.5 text-[11px] tabular-nums">
+              <span className="text-muted">
+                ({hoverInfo.x.toFixed(1).replace('.', ',')}; {hoverInfo.y.toFixed(1).replace('.', ',')}) m
+              </span>
+              <span className="font-semibold text-purple-dark dark:text-[#D8B4FE]">{hoverInfo.levelDB.toFixed(1).replace('.', ',')} dB</span>
             </div>
           ) : (
-            <span className="text-[10px] text-muted hidden sm:inline">Rueda: zoom · Arrastre: mover</span>
+            <div className="landing-glass rounded-full px-3 py-1.5 text-[10.5px] text-muted hidden sm:block">
+              Clic: inspeccionar P(x,y) · Rueda: zoom
+            </div>
           )}
 
           {isReversedWarning && (
-            <span className="text-[9px] font-semibold text-warm bg-warm/15 border border-warm/30 px-2 py-0.5 rounded-full">
-              ⚠️ Emite a Escenario
+            <span className="landing-glass rounded-full px-3 py-1.5 text-[10.5px] font-medium text-red dark:text-[#FB7185] border-[#F43F5E]/40">
+              ⚠️ Emite a escenario
             </span>
           )}
         </div>
       </div>
 
-      {/* ═══ CANVAS VIEWPORT AREA ═══ */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          width={canvasSize.w}
-          height={canvasSize.h}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-          onPointerLeave={() => { if (!dragState) setHoverInfo(null); }}
-          className={`absolute inset-0 w-full h-full touch-none ${dragState?.moved ? 'cursor-grabbing' : 'cursor-crosshair'}`}
-          aria-label="Mapa interactivo del campo acústico"
-        />
-      </div>
-
-      {/* ═══ VIEWPORT BOTTOM FOOTER: Fixed height h-8 (32px), NEVER expands or shrinks ═══ */}
-      <div className="h-8 min-h-[32px] max-h-[32px] flex items-center justify-between px-2.5 glass-strong border-t border-border z-10 gap-2 flex-shrink-0 overflow-hidden">
-        {/* Left: Zoom Controls & Presets */}
-        <div className="flex items-center gap-1">
+      {/* ═══ FLOATING HUD BOTTOM: Zoom, Scale & Layer Pills ═══ */}
+      <div className="absolute bottom-3 inset-x-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        {/* Left Pill: Zoom Controls & Span Presets */}
+        <div className="landing-glass rounded-full px-2 py-1 flex items-center gap-1 pointer-events-auto">
           <button
             type="button"
             onClick={() => handleZoom('in')}
-            className="p-1 rounded-md text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            className="h-6 w-6 grid place-items-center rounded-full text-muted hover:text-text hover:bg-white/10 transition-colors"
             title="Acercar (Zoom In)"
           >
             <ZoomIn className="h-3.5 w-3.5" />
@@ -559,7 +591,7 @@ export default React.memo(function FieldMap() {
           <button
             type="button"
             onClick={() => handleZoom('out')}
-            className="p-1 rounded-md text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            className="h-6 w-6 grid place-items-center rounded-full text-muted hover:text-text hover:bg-white/10 transition-colors"
             title="Alejar (Zoom Out)"
           >
             <ZoomOut className="h-3.5 w-3.5" />
@@ -567,59 +599,59 @@ export default React.memo(function FieldMap() {
           <button
             type="button"
             onClick={handleReset}
-            className="p-1 rounded-md text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            className="h-6 w-6 grid place-items-center rounded-full text-muted hover:text-text hover:bg-white/10 transition-colors"
             title="Restablecer vista a ±12m"
           >
             <RotateCcw className="h-3 w-3" />
           </button>
 
-          <div className="w-px h-3.5 bg-border mx-1" />
+          <div className="w-px h-3.5 bg-border mx-0.5" />
 
           {[3, 12, 25].map((val) => (
             <button
               key={val}
               type="button"
               onClick={() => dispatch({ type: 'SET_MAP_SPAN', payload: val })}
-              className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors ${
+              className={`px-2 py-0.5 rounded-full text-[10.5px] tabular-nums transition-all ${
                 Math.abs(mapSpan - val) < 1.5
-                  ? 'bg-purple/20 text-purple-dark dark:text-purple-light font-bold border border-purple/30'
+                  ? 'bg-white text-[#0B0712] font-medium'
                   : 'text-muted hover:text-text'
               }`}
             >
-              {val}m
+              {val} m
             </button>
           ))}
+
+          {state.viewMode !== 'contours' && (
+            <div className="hidden xl:flex items-center gap-1.5 pl-2 pr-1 border-l border-border ml-1">
+              <span className="text-[9.5px] text-muted tabular-nums">−40</span>
+              <div
+                className="h-1.5 w-14 rounded-full opacity-90"
+                style={{
+                  background: 'linear-gradient(to right, #0e0f1e, #28114b, #64186e, #b43664, #f0733c, #fac850, #fcfdbf)',
+                }}
+              />
+              <span className="text-[9.5px] text-muted tabular-nums">+12 dB</span>
+            </div>
+          )}
         </div>
 
-        {/* Center: Color gradient (only in heatmap view when space permits) */}
-        {state.viewMode !== 'contours' && (
-          <div className="hidden 2xl:flex items-center gap-1.5 pointer-events-none">
-            <span className="text-[8px] text-muted font-mono">−40dB</span>
-            <div
-              className="h-1.5 w-16 rounded-full opacity-80"
-              style={{
-                background: 'linear-gradient(to right, #0e0f1e, #28114b, #64186e, #b43664, #f0733c, #fac850, #fcfdbf)',
-              }}
-            />
-            <span className="text-[8px] text-muted font-mono">+12dB</span>
-          </div>
-        )}
-
-        {/* Right: Layer Toggles */}
-        <div className="flex items-center gap-1">
+        {/* Right Pill: Layer Toggles */}
+        <div className="landing-glass rounded-full p-1 flex items-center gap-0.5 pointer-events-auto">
           {[
             { key: 'contours', label: 'Curvas' },
-            { key: 'gradientVector', label: '∇ Grad' },
+            { key: 'gradientVector', label: '∇E' },
             { key: 'criticalPoints', label: 'Pt. Crít.' },
+            { key: 'integrationMesh', label: 'Malla ∬' },
           ].map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => dispatch({ type: 'TOGGLE_LAYER', payload: key })}
-              className={`rounded-md px-2 py-0.5 text-[9px] font-medium transition-all border ${
+              className={`rounded-full px-2.5 py-1 text-[10.5px] transition-all ${
                 state.layers[key]
-                  ? 'text-purple-dark dark:text-purple-light bg-purple/15 dark:bg-purple/25 border-purple/30 font-semibold'
-                  : 'text-muted hover:text-text border-transparent'
+                  ? 'bg-[#7C3AED] text-white font-medium shadow-[0_2px_10px_rgba(124,58,237,0.4)]'
+                  : 'text-muted hover:text-text'
               }`}
             >
               {label}

@@ -246,28 +246,29 @@ export default React.memo(function PolarPlot({ interactive = true }) {
   }, [interactive, polarData]);
 
   return (
-    <div ref={containerRef} className="w-full h-full flex flex-col relative overflow-hidden select-none bg-surface-solid dark:bg-[#080A14]">
-      {/* Viewport Top Bar */}
-      <div className="h-8 min-h-[32px] max-h-[32px] flex items-center justify-between px-3 glass-strong border-b border-border text-[11px] z-10 flex-shrink-0 overflow-hidden">
-        <div className="flex items-center gap-1.5 font-mono">
-          <span className="font-semibold text-text">Diagrama Polar</span>
-          <span className="text-[10px] text-muted opacity-60">@ {state.frequency} Hz</span>
+    <div ref={containerRef} className="w-full h-full flex flex-col relative overflow-hidden select-none bg-white dark:bg-black">
+      {/* Floating HUD Top */}
+      <div className="absolute top-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+        <div className="landing-glass rounded-full px-3.5 py-1.5 flex items-center gap-2 text-[11px] pointer-events-auto">
+          <span className="font-medium text-text">Patrón Polar</span>
+          <span className="text-muted tabular-nums">{state.frequency} Hz</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-semibold ${peakAngle > 90 && peakAngle < 270 ? 'text-warm' : 'text-purple-dark dark:text-purple-light'}`}>
-            {peakAngle > 90 && peakAngle < 270 ? '⚠️ Emite a Escenario (−180°)' : 'Lóbulo a Público (0°)'}
-          </span>
-          {hoverData && (
-            <span className="glass-strong px-2 py-0.5 rounded-full font-mono text-[10px] text-text border border-border shadow-sm">
-              θ={hoverData.deg}°: <strong className="text-purple-dark dark:text-purple-light">{hoverData.cardioidDB.toFixed(1)} dB</strong>
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {hoverData ? (
+            <span className="landing-glass px-3.5 py-1.5 rounded-full tabular-nums text-[11px] text-text">
+              θ = {hoverData.deg}° · <strong className="font-semibold text-purple-dark dark:text-[#D8B4FE]">{hoverData.cardioidDB.toFixed(1).replace('.', ',')} dB</strong>
+            </span>
+          ) : (
+            <span className={`landing-glass rounded-full px-3 py-1.5 text-[10.5px] font-medium ${peakAngle > 90 && peakAngle < 270 ? 'text-red dark:text-[#FB7185]' : 'text-purple-dark dark:text-[#D8B4FE]'}`}>
+              {peakAngle > 90 && peakAngle < 270 ? '⚠️ Lóbulo hacia escenario (−180°)' : 'Lóbulo hacia público (0°)'}
             </span>
           )}
         </div>
       </div>
 
       {/* Canvas Area (Centered) */}
-      <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+      <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
         <canvas
           ref={canvasRef}
           width={plotSize}
@@ -279,17 +280,19 @@ export default React.memo(function PolarPlot({ interactive = true }) {
         />
       </div>
 
-      {/* Viewport Bottom Footer (Legend) */}
-      <div className="h-8 min-h-[32px] max-h-[32px] flex items-center justify-between px-3 glass-strong border-t border-border text-[10px] text-muted z-10 flex-shrink-0 overflow-hidden">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 font-medium text-text">
-            <span className="w-2 h-2 rounded-full bg-purple inline-block" /> Actual
+      {/* Floating HUD Bottom (Legend) */}
+      <div className="absolute bottom-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+        <div className="landing-glass rounded-full px-3.5 py-1.5 flex items-center gap-3 text-[10.5px] pointer-events-auto">
+          <span className="flex items-center gap-1.5 text-text">
+            <span className="w-2 h-2 rounded-full bg-[#A855F7] inline-block" /> Arreglo actual
           </span>
-          <span className="flex items-center gap-1 font-medium text-text">
-            <span className="w-3 h-0.5 border-b border-dashed border-red inline-block" /> En Fase
+          <span className="flex items-center gap-1.5 text-muted">
+            <span className="w-3 h-0.5 border-b border-dashed border-[#F43F5E] inline-block" /> 2 subs en fase
           </span>
         </div>
-        <span className="font-mono text-[9px]">Escala: 0 a −30 dB</span>
+        <div className="landing-glass rounded-full px-3 py-1.5 text-[10px] text-muted tabular-nums pointer-events-auto">
+          0 a −30 dB
+        </div>
       </div>
     </div>
   );

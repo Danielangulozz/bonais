@@ -51,13 +51,16 @@ export const INITIAL_STATE = {
   inspectedPoint: { x: 5.0, y: 0.0 },
   audienceRegion: { ...DEFAULT_AUDIENCE_REGION },
   stageRegion: { ...DEFAULT_STAGE_REGION },
+  venue: 'concierto',
   layers: {
     contours: true,
     criticalPoints: false, // Apagado por defecto para limpieza visual
     gradientVector: true,
     asymptoticMinima: true,
     regions: true,
+    integrationMesh: false,
   },
+  rightPanel: 'model', // 'model' | 'results'
   activePage: 'landing', // 'landing' | 'simulator'
   viewMode: 'map2d', // 'map2d' | 'polar' | 'dual' | 'contours'
   layoutMode: 'studio', // 'studio' | 'fullscreen'
@@ -196,6 +199,42 @@ function arrayReducer(state, action) {
       };
     }
 
+    case 'SET_REGION_DIMS': {
+      // Dimensiones "de usuario" → región rectangular. Público hacia +x, escenario hacia −x.
+      const { regionName, gap, depth, width } = action.payload;
+      const g = Math.max(0.5, Math.min(gap, 60));
+      const dp = Math.max(1, Math.min(depth, 120));
+      const w = Math.max(1, Math.min(width, 120));
+      const region = regionName === 'audienceRegion'
+        ? { xMin: g, xMax: g + dp, yMin: -w / 2, yMax: w / 2 }
+        : { xMin: -(g + dp), xMax: -g, yMin: -w / 2, yMax: w / 2 };
+      return { ...state, [regionName]: region, venue: 'custom' };
+    }
+
+    case 'APPLY_VENUE_PRESET': {
+      const venues = {
+        sala: { aud: [2, 10, 10], stg: [1.5, 5, 8] },
+        concierto: { aud: [3, 12, 16], stg: [3, 12, 16] },
+        festival: { aud: [5, 40, 40], stg: [2, 10, 18] },
+      };
+      const v = venues[action.payload];
+      if (!v) return state;
+      const [ag, ad, aw] = v.aud;
+      const [sg, sd, sw] = v.stg;
+      return {
+        ...state,
+        venue: action.payload,
+        audienceRegion: { xMin: ag, xMax: ag + ad, yMin: -aw / 2, yMax: aw / 2 },
+        stageRegion: { xMin: -(sg + sd), xMax: -sg, yMin: -sw / 2, yMax: sw / 2 },
+        // Encuadre que muestra ambas zonas completas
+        mapSpan: Math.max(8, 0.55 * Math.max(ag + ad + sg + sd, aw, sw)),
+        panOffset: { x: (ag + ad - sg - sd) / 2, y: 0 },
+      };
+    }
+
+    case 'SET_RIGHT_PANEL':
+      return { ...state, rightPanel: action.payload };
+
     case 'SET_VIEW_MODE':
       return { ...state, viewMode: action.payload };
 
@@ -228,13 +267,17 @@ export function ArrayProvider({ children }) {
   // Estabilizar dispatch con useCallback (es estable por naturaleza, pero explicitamos)
   const stableDispatch = useCallback(dispatch, []);
 
-  // Efecto para aplicar tema claro/oscuro en el elemento html
+  // Efecto para aplicar tema claro/oscuro en el elemento html y sincronizar favicon
   useEffect(() => {
     const root = document.documentElement;
     if (state.theme === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
+    }
+    const iconLink = document.querySelector('link[rel="icon"]');
+    if (iconLink) {
+      iconLink.setAttribute('href', state.theme === 'dark' ? '/logo-dark.png' : '/favicon.png');
     }
   }, [state.theme]);
 
