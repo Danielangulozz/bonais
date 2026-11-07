@@ -1,0 +1,647 @@
+\chapter{MARCO TEÓRICO}
+
+\addcontentsline{toc}{section}{Introducción al marco teórico}
+
+Para entender cómo funciona BONAIS hay que recorrer un camino, y ese
+camino es el que traza este capítulo. Se empieza por lo más básico:
+qué es una onda sonora y cómo viaja por el aire. Después se pregunta
+qué ocurre cuando no una, sino dos ondas viajan al tiempo por el mismo
+espacio, y se llega al fenómeno de la interferencia, con sus zonas de
+refuerzo y de cancelación. Ese fenómeno se expresa después en la
+escala con la que realmente se mide el sonido, el decibel, y en una
+advertencia que se vuelve central para todo lo demás: los niveles no
+se suman como números comunes.\\
+
+\noindent Con esa física ya planteada, el capítulo da un giro hacia las
+matemáticas: se muestra que el campo sonoro de un arreglo de fuentes
+no es más que una función de dos variables, del tipo que estudia el
+Cálculo III, y que las curvas de nivel, el gradiente y los puntos
+críticos de esa función son, ni más ni menos, las herramientas que
+permiten leer el mapa de sonido que genera BONAIS. Por último, el
+capítulo se detiene en la industria: en que este problema ya lo
+enfrentan a diario los ingenieros de sonido en vivo, y en cómo lo han
+resuelto con los llamados arreglos direccionales de subwoofers, la
+aplicación concreta que este proyecto busca modelar y optimizar.
+
+\section{Cómo se propaga el sonido: la ecuación de onda}
+
+La acústica estudia la generación, propagación y recepción de energía
+mecánica en forma de ondas de presión que viajan a través de un medio
+elástico \cite{kinsler2000,rossing2014handbook}. En un fluido como el
+aire, las ondas sonoras son longitudinales: las partículas del medio
+oscilan en la misma dirección en que se propaga la perturbación,
+generando regiones alternadas de compresión y rarefacción
+\cite{kinsler2000}.\\
+
+\noindent Al aplicar la conservación de masa (ecuación de continuidad), la
+segunda ley de Newton (ecuación de Euler) y la ecuación de estado a un
+elemento de fluido, y linealizar el resultado suponiendo que las
+perturbaciones acústicas son de amplitud pequeña frente a las
+condiciones de equilibrio del medio, se obtiene la \emph{ecuación de
+onda acústica lineal}, que distintos autores presentan de forma
+equivalente en su versión tridimensional
+\cite{kinsler2000,rossing2014handbook,pierce2014handbook}:
+
+\begin{equation}
+\nabla^2 p = \frac{1}{c^2}\frac{\partial^2 p}{\partial t^2},
+\label{eq:onda3D}
+\end{equation}
+
+donde la presión acústica se representa matemáticamente como una función \(P(x,y,z,t)\) que depende de múltiples variables espaciales \((x,y,z)\) y del tiempo \(t\). La presencia del operador Laplaciano (\(\nabla^2\)) en la ecuación de onda tridimensional, el cual agrupa las segundas derivadas parciales espaciales, evidencia que la propagación del sonido es inherentemente un fenómeno multidimensional; esto justifica desde el primer momento la necesidad de aplicar el cálculo de varias variables para su análisis formal. Además, \(c=\sqrt{\mathcal{B}/\rho_0}\) es la
+velocidad de propagación del sonido en el medio, con \(\mathcal{B}\) el
+módulo de compresibilidad adiabático del fluido y \(\rho_0\) su densidad
+de equilibrio; en el aire, a temperatura ambiente, $c\approx
+343\ \text{m/s}$ \cite{kinsler2000,rossing2014handbook}.\\
+
+Para señales
+armónicas, con dependencia temporal \(e^{j\omega t}\), la
+ecuación~\eqref{eq:onda3D} se transforma en la ecuación espacial de
+Helmholtz \(\nabla^2 P + k^2 P = 0\), donde \(k=\omega/c=2\pi/\lambda\) es
+el número de onda \cite{pierce2014handbook}.\\
+
+La ecuación~\eqref{eq:onda3D} es la base de la que se derivan las
+soluciones empleadas en este trabajo. Su solución más simple es la
+onda plana armónica; sin embargo, para una fuente aislada y de tamaño
+pequeño frente a la longitud de onda (el caso de un subwoofer, que
+interesa a este proyecto), la solución relevante es la \emph{onda
+esférica}. Cuando la fuente radia por igual en todas direcciones,
+conviene expresar la ecuación~\eqref{eq:onda3D} en coordenadas
+esféricas; para el caso de simetría radial, su solución armónica
+divergente es
+
+\begin{equation}
+p(r,t) = \frac{A}{r}\, e^{j(\omega t - kr)},
+\label{eq:onda_esferica}
+\end{equation}
+
+es decir, una onda cuya amplitud decae como \(1/r\) a medida que se aleja
+de la fuente, a diferencia de la amplitud constante de la onda plana
+\cite{kinsler2000}. Al introducir explícitamente una fuente puntual
+ubicada en \(\vec{r}_0\), la presión que radia se escribe como
+
+\begin{equation}
+p(\vec{r},t) = \frac{A}{|\vec{r}-\vec{r}_0|}\,
+\exp\!\big[j(\omega t - k|\vec{r}-\vec{r}_0|)\big].
+\label{eq:fuente_puntual}
+\end{equation}
+
+¿Por qué es razonable tratar un subwoofer, que es un objeto físico con
+dimensiones, como si fuera un simple punto matemático? La respuesta
+está en comparar su tamaño con la longitud de onda que emite. En el
+rango de interés del sonido en vivo para subwoofers
+(\(40\ \text{Hz}\le f\le 100\ \text{Hz}\)), la longitud de onda
+\(\lambda=c/f\) oscila entre \(3{,}4\ \text{m}\) y \(8{,}6\ \text{m}\). Frente
+a esas dimensiones, las de la caja acústica de un subwoofer, del orden
+de $0{,}6$ a \(0{,}8\ \text{m}\), son notablemente menores, de modo que
+se cumple la condición de \emph{fuente acústicamente compacta},
+\(kd_{\text{caja}}\ll 1\) \cite{pierce2014handbook}. Bajo este régimen,
+la radiación carece de directividad propia a nivel de caja y el
+subwoofer se comporta, en muy buena aproximación, como la fuente
+puntual (monopolo esférico) de la
+ecuación~\eqref{eq:fuente_puntual}, radiando de manera casi
+omnidireccional \cite{pierce2014handbook,rossing2014handbook}. Esta
+formulación es la que se combina linealmente, como se muestra a
+continuación, para construir los campos de interferencia de un
+arreglo de varias fuentes \cite{kinsler2000}.
+
+
+\noindent La figura~\ref{fig:onda_esferica} muestra cómo se ve esta solución: frentes de onda circulares separados una longitud de onda, cuya amplitud disminuye a medida que se alejan de la fuente.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/mt_onda_esferica.png}
+\caption{Izquierda: frentes de onda de una fuente puntual a 80~Hz. Derecha: el nivel cae 6~dB cada vez que se duplica la distancia, por el decaimiento $1/r$. Fuente: elaboración propia.}
+\label{fig:onda_esferica}
+\end{figure}
+
+\section{Cuando dos fuentes se encuentran: superposición e interferencia}
+\label{sec:interferencia}
+
+La ecuación de onda~\eqref{eq:onda3D} es lineal, lo que implica que si
+\(p_1\) y \(p_2\) son soluciones válidas (por ejemplo, los campos de
+presión producidos por dos fuentes independientes), entonces su suma
+\(p=p_1+p_2\) también lo es. A esta propiedad se le conoce como
+\emph{principio de superposición} y constituye la base matemática de
+todos los fenómenos de interferencia acústica
+\cite{kinsler2000,rossing2014handbook}.\\
+
+Un ejemplo representativo, desarrollado en detalle por
+Kinsler et al.\ \cite{kinsler2000}, es el del \emph{doblete o dipolo
+acústico}: dos fuentes puntuales idénticas, separadas una distancia
+\(d\) pequeña frente a la longitud de onda (\(kd\ll 1\)), que vibran en
+fase opuesta (desfasadas \(180^{\circ}\)). Sumando las contribuciones de
+cada fuente, cada una de la forma de la
+ecuación~\eqref{eq:fuente_puntual}, se obtiene en el campo lejano
+
+\begin{equation}
+p(r,\theta,t) = -j\,\frac{Akd}{r}\,\operatorname{sen}\theta\;
+e^{j(\omega t - kr)},
+\label{eq:dipolo}
+\end{equation}
+
+de modo que la amplitud sigue un patrón proporcional a
+\(|\operatorname{sen}\theta|\): el campo se refuerza en el plano
+perpendicular al eje de las fuentes y se cancela por completo a lo
+largo de dicho eje \cite{kinsler2000}. Este ejemplo ilustra cómo la
+interferencia entre dos ondas coherentes (misma frecuencia, diferencia
+de fase constante) produce patrones espaciales de refuerzo y
+cancelación que dependen de la geometría relativa de las fuentes y del
+punto de observación. Cabe precisar que la
+ecuación~\eqref{eq:dipolo} se dedujo bajo la aproximación \(kd\ll 1\); el
+arreglo de subwoofers estudiado en este proyecto opera, en cambio, en
+el régimen \(kd=\pi/2\) (separación de un cuarto de longitud de onda),
+donde dicha aproximación \textbf{no} es válida. Por esta razón, el
+modelo de BONAIS no usa la forma simplificada del dipolo, sino la
+superposición exacta (sin aproximar) de las ondas esféricas de cada
+fuente, aplicando únicamente el principio de superposición que este
+ejemplo ilustra.\\
+
+
+\noindent La figura~\ref{fig:interferencia} resume esta idea: en el tiempo, dos ondas en fase se suman y en contrafase se anulan; en el plano, eso se traduce en lóbulos de refuerzo y franjas de cancelación.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/mt_interferencia.png}
+\caption{Izquierda: dos ondas en fase se refuerzan y en contrafase se cancelan. Derecha: patrón de refuerzo y cancelación de dos fuentes en fase separadas 6~m a 80~Hz. Fuente: elaboración propia.}
+\label{fig:interferencia}
+\end{figure}
+
+
+Ese principio se generaliza sin dificultad a un arreglo de \(N\) fuentes,
+cada una con su propia amplitud, y con la posibilidad de aplicarle a
+cada una un retardo electrónico \(\tau_n\) y una inversión de polaridad,
+ambos ajustables mediante un procesador de señal:
+
+\begin{equation}
+P_{\text{total}}(x,y) = \sum_{n=1}^{N} \frac{A_n}{r_n(x,y)}\,
+e^{-j\left(k\,r_n(x,y) + \phi_n\right)},
+\qquad
+r_n(x,y) = \sqrt{(x-x_n)^2+(y-y_n)^2},
+\label{eq:campo_total}
+\end{equation}
+
+donde \(\phi_n=\omega\tau_n+\theta_n\) reúne la fase introducida por el
+retardo \(\tau_n\) y una eventual inversión de polaridad
+\(\theta_n\in\{0,\pi\}\) \cite{pierce2014handbook}. La diferencia de fase
+neta con la que dos fuentes llegan a un punto del espacio, y que
+determina si allí hay refuerzo o cancelación, queda entonces
+determinada tanto por la diferencia de caminos recorridos como por el
+retardo y la polaridad aplicados electrónicamente:
+
+\begin{equation}
+\Delta\Phi(x,y) = k\big(r_2(x,y)-r_1(x,y)\big) + \omega\tau + \Delta\phi.
+\label{eq:fase_neta}
+\end{equation}
+
+Esta última observación es la que permite el paso de la física a la
+ingeniería: si la diferencia de caminos \(r_2-r_1\) ya está fijada por
+la geometría del arreglo, el retardo \(\tau\) y la polaridad quedan como
+\emph{parámetros de diseño} que un ingeniero puede ajustar a voluntad
+para inducir interferencia constructiva hacia una dirección deseada
+(el público) y destructiva hacia otra (el escenario), dando origen al
+arreglo cardioide que se describe más adelante en este capítulo.\\
+
+De la ecuación~\eqref{eq:campo_total} se obtiene además el campo de
+presión eficaz al cuadrado, proporcional a la energía e independiente
+del tiempo, \(p_{\text{rms}}^2(x,y)=\tfrac{1}{2}|P_{\text{total}}(x,y)|^2\)
+\cite{pierce2014handbook}. Esta función bidimensional es, precisamente,
+la base analítica sobre la que se construyen las curvas de nivel, el
+gradiente y las integrales de energía que emplea BONAIS, y que se
+presentan en las secciones siguientes.
+
+\section{El decibel explica por qué los niveles no se suman}
+\label{sec:decibel}
+
+Dado que las magnitudes acústicas de interés (potencia, intensidad,
+presión) abarcan un intervalo enorme de valores, es habitual
+expresarlas en una escala relativa y logarítmica. Si \(W_1\) es la
+potencia de una fuente y \(W_0\) una potencia de referencia, el nivel
+correspondiente, en belios, se define como
+\(L_1=\log_{10}(W_1/W_0)\); como el belio resulta una unidad
+impráctica, se emplea en su lugar el \emph{decibel}, una décima parte
+de un belio \cite[pág.~27]{everest2001}:
+
+\begin{equation}
+L_1 = 10 \log_{10}\!\left(\frac{W_1}{W_0}\right) \quad \text{[dB]}.
+\label{eq:decibel_potencia}
+\end{equation}
+
+Esta definición aplica directamente a cualquier magnitud proporcional
+a la energía o a la potencia, como la intensidad acústica \(I\). Puesto
+que la intensidad de una onda es proporcional al cuadrado de la
+presión acústica \(p\), al sustituir \(I\propto p^2\) en la
+ecuación~\eqref{eq:decibel_potencia} el exponente al cuadrado se
+convierte en un factor 2 delante del logaritmo, de modo que el nivel
+expresado en términos de presión resulta \cite[pág.~27]{everest2001}:
+
+\begin{equation}
+L_p = 10 \log_{10}\!\left(\frac{p_1^2}{p_2^2}\right)
+    = 20 \log_{10}\!\left(\frac{p_1}{p_2}\right) \quad \text{[dB]}.
+\label{eq:decibel_presion}
+\end{equation}
+
+Para obtener un valor absoluto y no solo una comparación entre dos
+presiones, se fija una presión de referencia común e
+internacionalmente aceptada,
+\(p_{\text{ref}}=0\text{,}0002\ \mu\text{bar}=20\ \mu\text{Pa}\), con la
+cual la ecuación~\eqref{eq:decibel_presion} define el \emph{nivel de
+presión sonora} (SPL) de cualquier sonido \cite[pág.~28]{everest2001}. Esta es
+la magnitud que se reporta al medir un sonido con un sonómetro, y la
+que se emplea en este proyecto en la forma equivalente
+\(L=10\log_{10}(E/E_{\text{ref}})\), al trabajar con el campo de energía
+\(E=|P|^2\) de un arreglo de fuentes (el mismo campo
+\(p_{\text{rms}}^2(x,y)\) presentado al final de la sección anterior.\\
+
+Una consecuencia directa de que el decibel sea una escala logarítmica
+es que \textbf{los niveles no se pueden sumar aritméticamente}: el
+nivel producido por dos fuentes sonando a la vez no es la suma de sus
+niveles individuales en dB. Everest ilustra este punto con el caso de
+dos fuentes de ruido de un estudio, un aire acondicionado con nivel de
+\(55\ \text{dB}\) y un ventilador con nivel de \(60\ \text{dB}\): el nivel
+combinado de ambos sonando al tiempo no es \(115\ \text{dB}\), sino que
+se obtiene devolviendo cada nivel a su magnitud original (potencia o
+intensidad relativa), sumando esas magnitudes, y solo entonces
+tomando el logaritmo del resultado \cite[pág.~36]{everest2001}:
+
+\begin{equation}
+L_{\text{combinado}} = 10 \log_{10}\!\left(10^{L_1/10} + 10^{L_2/10}\right)
+\quad \text{[dB]},
+\label{eq:combinar_db}
+\end{equation}
+
+lo que en el ejemplo citado da $10\log_{10}(10^{5.5}+10^{6.0})\approx
+61\text{,}2\ \text{dB}$, un valor apenas superior al mayor de los dos
+niveles individuales y muy distinto de su suma aritmética
+\cite[pág.~36]{everest2001}. La misma idea, aplicada en sentido inverso
+(restando la contribución de una fuente conocida a un nivel total
+medido), permite además aislar el nivel de una fuente que no se puede
+medir por separado \cite[pág.~36]{everest2001}.\\
+
+La ecuación~\eqref{eq:combinar_db} es, en el fondo, la versión en
+decibeles del principio de superposición presentado en la sección
+anterior: para combinar el efecto de varias fuentes hay que trabajar
+primero con la magnitud física (presión, si las fuentes son coherentes
+y hay que respetar su fase, como en la
+ecuación~\eqref{eq:campo_total} y expresar el resultado en dB solo al
+final. Esta observación es la que exige que, en todo el desarrollo
+matemático que sigue, el campo total se calcule siempre como una suma
+compleja de las contribuciones individuales antes de convertir
+cualquier resultado a decibeles.
+
+\section{El campo sonoro como función de dos variables}
+\label{sec:campo_total}
+
+\noindent Hasta aquí, el campo de presión de un arreglo de subwoofers,
+\(P_{\text{total}}(x,y)\), se ha tratado como un objeto físico. Pero
+basta con mirarlo de nuevo para notar algo importante: a cada punto
+\((x,y)\) del plano (cada posición del público o del escenario) le
+corresponde un único valor de energía o de nivel sonoro. Eso es,
+exactamente, la definición de una función de dos variables.\\
+
+Una función de dos variables es una regla de correspondencia que
+asigna a cada par ordenado de números reales \((x,y)\) de un
+subconjunto \(D\) del plano un único número real \(z=f(x,y)\)
+\cite[cap.\ funciones de varias variables]{stewart2018},
+\cite[cap.\ 12]{larson2015}. El dominio \(D\) representa el conjunto de
+todas las posibles entradas, mientras que el rango es el conjunto de
+todos los valores de salida \(z\). Geométricamente, la gráfica de una
+función continua de dos variables representa una superficie
+tridimensional en el espacio.\\
+
+Para facilitar la interpretación de esa superficie sin necesidad de
+dibujarla en tres dimensiones, se emplean las \emph{curvas de nivel}.
+Una curva de nivel agrupa todos los puntos \((x,y)\) del dominio donde
+la función toma un valor constante \(c\), es decir, todos los puntos que
+satisfacen
+
+\begin{equation}
+f(x,y) = c.
+\end{equation}
+
+El conjunto de estas curvas, proyectadas sobre el plano \(xy\), conforma
+un mapa de contorno que describe la topografía de la función: cuando
+las curvas de nivel están muy juntas, la superficie es más empinada, y
+cuando están separadas, la inclinación es menor.\\
+
+En el diseño y análisis acústico de este proyecto, el campo sonoro se
+representa exactamente como una función espacial de dos variables
+\(L(x,y)\), la misma que se definió en la sección anterior a partir de
+\(P_{\text{total}}(x,y)\). Este concepto matemático es el que permite
+interpretar gráficamente el mapa de calor que genera BONAIS: las
+líneas que en ese mapa separan zonas de distinto color son, por
+definición, curvas de nivel de la función de presión sonora. A través
+de esta representación se puede observar y predecir el comportamiento
+espacial del campo, viendo con claridad cómo las zonas de refuerzo
+(interferencia constructiva) y de cancelación (interferencia
+destructiva) adquieren distribuciones geométricas medibles, que
+típicamente forman curvas semejantes a hipérbolas. Esta base matemática
+es la que sustenta de manera directa los objetivos específicos relacionados
+con la evaluación de la energía acústica y las condiciones de separación
+entre las fuentes.
+
+
+\noindent La figura~\ref{fig:superficie_curvas} muestra las dos formas de ver la misma función: como superficie en el espacio y como mapa de curvas de nivel, que es la vista que usa BONAIS.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/mt_superficie_curvas.png}
+\caption{El nivel $L(x,y)$ de un arreglo cardioide a 80~Hz visto como superficie (izquierda) y como curvas de nivel (derecha). Fuente: elaboración propia.}
+\label{fig:superficie_curvas}
+\end{figure}
+
+\section{Gradiente, puntos críticos y el criterio del Hessiano}
+\label{sec:gradiente}
+
+Una vez que el campo sonoro se reconoce como una función de dos
+variables, la siguiente pregunta natural es cómo cambia esa función de
+un punto a otro, y dónde se encuentran sus valores extremos. Para
+responderla, el Cálculo III ofrece un conjunto de herramientas que se
+presentan a continuación en el mismo orden en que se necesitan.\\
+
+Para estudiar la tasa de cambio de una función \(f(x,y)\) respecto a una
+sola de sus variables se utilizan las \emph{derivadas parciales}
+\cite{apostol,larson2015,stewart2018}. La derivada parcial respecto
+a \(x\) se calcula derivando la función y tratando a \(y\) como una
+constante, y de forma análoga para la derivada respecto a \(y\); se
+denotan como \(f_x(x,y)\) o \(\partial f/\partial x\), y \(f_y(x,y)\) o
+\(\partial f/\partial y\), respectivamente.\\
+
+A partir de las primeras derivadas parciales se construye el vector
+\emph{gradiente}, denotado \(\nabla f(x,y)\)
+\cite[pág.~310]{apostol} \cite[pág.~1126]{larson2015}
+. Este vector contiene las
+derivadas parciales como sus componentes:
+
+\begin{equation}
+\nabla f(x,y) = \frac{\partial f}{\partial x}\,\hat{\imath}
+              + \frac{\partial f}{\partial y}\,\hat{\jmath}.
+\end{equation}
+
+El gradiente tiene una propiedad geométrica fundamental, ya anticipada
+al hablar de las curvas de nivel: siempre apunta en la dirección de
+mayor tasa de incremento de la función, y es ortogonal a la curva de
+nivel que pasa por cada punto \cite{marsden2011,stewart2018}.\\
+
+En el marco de la optimización de funciones de varias variables, los \emph{puntos críticos} de la función analizada (como la presión acústica \(P\) o un campo genérico \(f\)) se hallan teóricamente en aquellas coordenadas del dominio donde el vector gradiente es exactamente igual a cero,
+
+\begin{equation}
+\nabla P = \vec{0},
+\end{equation}
+
+\noindent o donde las derivadas parciales no existen. Estos puntos críticos representan las ubicaciones candidatas a ser valores extremos de la superficie estudiada. Para determinar rigurosamente la naturaleza geométrica de ese punto crítico (es decir, si representa un máximo (refuerzo acústico), un mínimo (cancelación) o un punto de silla), la teoría exige el uso de las segundas derivadas parciales organizadas algebraicamente en la matriz Hessiana \cite[pág. 196]{marsden2011}, \cite[pág. 946]{stewart2018}, \cite[pág. 378 y 380]{apostol}. Sea \(D\) el discriminante
+evaluado en un punto crítico \((a,b)\), definido a partir del
+determinante del Hessiano:
+
+\begin{equation}
+D = f_{xx}(a,b)\,f_{yy}(a,b) - \big[f_{xy}(a,b)\big]^2.
+\end{equation}
+
+El criterio establece que:
+\begin{itemize}
+    \item si \(D>0\) y \(f_{xx}(a,b)>0\), entonces \(f(a,b)\) es un
+    \textbf{mínimo local};
+    \item si \(D>0\) y \(f_{xx}(a,b)<0\), entonces \(f(a,b)\) es un
+    \textbf{máximo local};
+    \item si \(D<0\), entonces \(f(a,b)\) es un \textbf{punto de silla}
+    (no es máximo ni mínimo).
+\end{itemize}
+
+\noindent Este andamiaje teórico es, precisamente, el que fundamenta los
+procesos internos que ejecuta el software BONAIS. Al analizar el
+comportamiento de un arreglo, la aplicación necesita identificar los
+picos y las caídas del nivel sonoro, permitiendo así mapear la
+distribución de energía en el espacio de estudio, paso previo
+indispensable para alcanzar los objetivos del proyecto. Para lograr un
+procesamiento algorítmico numéricamente estable, la aplicación no deriva
+directamente la función de nivel sonoro en dB (que, al ser logarítmica,
+se dispara cerca de los nulos de presión), sino que aplica el gradiente
+y el criterio del Hessiano sobre el campo de energía cuadrática \(E=|P|^2\)
+definido en las secciones anteriores. De esta manera, cada vez que se explora
+una coordenada en el mapa de BONAIS, la aplicación puede reportar de forma
+eficiente la dirección de mayor cambio del campo y la localización
+exacta de sus puntos críticos.
+
+
+\noindent En la figura~\ref{fig:gradiente} cada flecha es el vector gradiente en ese punto: apunta hacia donde el nivel sube más rápido y corta perpendicularmente las curvas de nivel.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{figuras/mt_gradiente.png}
+\caption{Campo de gradiente del nivel para dos fuentes en fase separadas 5~m a 80~Hz. Cada flecha apunta hacia donde el nivel crece más rápido y es perpendicular a las curvas de nivel. Entre las fuentes hay un máximo local. Fuente: elaboración propia.}
+\label{fig:gradiente}
+\end{figure}
+
+\subsection{Dos dominios distintos para una misma herramienta: el espacio y el diseño}
+
+\noindent La sección anterior aplicó el gradiente y el criterio del Hessiano
+sobre el campo \(E(x,y)\), es decir, sobre el \emph{dominio espacial}: a
+cada coordenada del recinto le corresponde un valor de energía. Ese
+análisis permite comprender el comportamiento del campo sonoro en el
+espacio de estudio, pero \textbf{no} es, por sí solo, el que responde
+al objetivo general del proyecto. Determinar la separación \(d\) y el
+retardo \(\tau\) que maximizan la atenuación trasera exige aplicar
+exactamente el mismo herramental (gradiente, puntos críticos, Hessiano)
+pero sobre un \emph{dominio distinto}: ya no el de las coordenadas \((x,y)\)
+del recinto, sino el de los \emph{parámetros de diseño} \((d,\tau)\) del arreglo.\\
+
+\noindent Para ello se define una segunda función, la \emph{función de
+atenuación}, que ya no depende de la posición sino únicamente de la
+separación y el retardo elegidos para el arreglo. Sean
+\(E_{\text{frente}}(d,\tau)\) y \(E_{\text{atrás}}(d,\tau)\) la energía del
+campo, calculada mediante la ecuación~\eqref{eq:campo_total}, en un
+punto de referencia situado respectivamente delante y detrás del
+arreglo. Siguiendo la misma regla establecida en la
+sección~\ref{sec:decibel} de trabajar siempre con la magnitud física
+antes de tomar el logaritmo, la atenuación trasera del arreglo, en
+decibeles, se define como
+
+\begin{equation}
+A(d,\tau) = 10\log_{10}\!\left(\frac{E_{\text{frente}}(d,\tau)}
+{E_{\text{atrás}}(d,\tau)}\right) \quad \text{[dB]}.
+\label{eq:funcion_atenuacion}
+\end{equation}
+
+\noindent La ecuación~\eqref{eq:funcion_atenuacion} es, formalmente, una función
+de dos variables \(A=A(d,\tau)\), en todo comparable a la función
+\(E(x,y)\) de la sección anterior. Por lo tanto, el objetivo específico
+centrado en determinar la separación y el retardo que maximizan la
+atenuación trasera se resuelve buscando los puntos \((d^\ast,\tau^\ast)\) donde
+
+\begin{equation}
+\nabla A(d^\ast,\tau^\ast) =
+\left(\frac{\partial A}{\partial d},\ \frac{\partial A}{\partial \tau}\right)
+= \vec{0},
+\end{equation}
+
+\noindent y clasificando dicho punto crítico con el mismo criterio del Hessiano
+presentado en la sección anterior, ahora aplicado sobre
+\(A(d,\tau)\): si el discriminante
+\(D=A_{dd}A_{\tau\tau}-A_{d\tau}^2\) es positivo y \(A_{dd}<0\), el punto
+\((d^\ast,\tau^\ast)\) corresponde a un \textbf{máximo} de la atenuación
+trasera, que es precisamente lo que busca el objetivo general del
+proyecto. El desarrollo explícito de \(A(d,\tau)\) y la determinación
+numérica de \((d^\ast,\tau^\ast)\) se presentan en el capítulo del
+modelo matemático, una vez definida la geometría concreta del arreglo.\\
+
+\noindent Conviene subrayar la diferencia entre los dos análisis para no
+confundirlos en el resto del documento: los puntos críticos de
+\(E(x,y)\) (sección~\ref{sec:gradiente}) señalan \emph{dónde}, en el
+recinto, el sonido se refuerza o se cancela, para un arreglo ya
+construido; los puntos críticos de \(A(d,\tau)\) (esta sección) señalan
+\emph{cómo construir} ese arreglo para que dicho refuerzo y
+cancelación queden orientados de la manera más favorable posible.\\
+
+\noindent Debe advertirse, además, que al igualar \(\nabla E(x,y)=\vec{0}\) o
+\(\nabla A(d,\tau)=\vec{0}\) se obtiene, en general, un sistema de
+ecuaciones no lineales que combina términos inversos \(1/r\) con sumas
+de exponenciales complejas, para el cual no existe, salvo en casos muy
+particulares, una solución analítica cerrada. Por esta razón, BONAIS
+no resuelve estos sistemas a mano, sino mediante \textbf{métodos
+numéricos de aproximación}: los puntos críticos espaciales se hallan
+con un método iterativo tipo Newton, y la optimización de
+\(A(d,\tau)\) se realiza mediante un método de descenso (o ascenso)
+más pronunciado sobre el gradiente \cite{chongzak2013}. Esta es una
+práctica estándar en optimización de funciones de varias variables
+cuando la función objetivo no admite una solución cerrada simple.
+
+\section{Integrales dobles sobre regiones generales}
+\label{sec:integrales_dobles}
+
+El primer objetivo específico de este proyecto busca establecer la
+relación entre la energía total en una región del recinto (por
+ejemplo, la zona ocupada por el público o la zona del escenario) y la
+suma de las energías que cada fuente aportaría por separado. Para
+plantear esa comparación con rigor es necesario definir, primero, qué
+significa la energía \emph{total} en una región y no solo en un punto.\\
+
+\noindent Dada una función continua \(f(x,y)\) definida sobre una región \(R\) del
+plano, la integral doble
+
+\begin{equation}
+\iint_R f(x,y)\, dA
+\end{equation}
+
+\noindent se define, igual que la integral de una variable, como el límite de
+una suma de Riemann: se cubre \(R\) con una malla de rectángulos
+pequeños de área \(\Delta A\), se evalúa \(f\) en un punto de cada uno, se
+multiplica por \(\Delta A\) y se suma sobre todos los rectángulos;
+cuando el tamaño de la malla tiende a cero, ese límite (si existe) es
+la integral doble
+\cite[cap.~15]{stewart2018}\cite[cap.~13]{larson2015}\cite[cap.~11]{apostol}.
+Cuando \(R\) es una región general (no necesariamente un rectángulo), el
+\textbf{teorema de Fubini} permite calcular la integral doble como dos
+integrales iteradas de una sola variable, integrando primero respecto
+a una variable con la otra fija y luego respecto a la restante
+\cite[pág.~982]{stewart2018}\cite[pág.~1210]{larson2015}\cite[pág.~348]{apostol}.\\
+
+\noindent Teóricamente, existe una relación directa entre la intensidad acústica y la energía total en un espacio físico. La energía de un campo sonoro no es un valor concentrado en un punto aislado, sino que representa una magnitud que requiere sumar la densidad de energía \(\varepsilon\) a lo largo de un área o volumen específico utilizando herramientas de integración. La energía total \(E\) contenida en un espacio tridimensional se calcula integrando la densidad de energía sobre un volumen \(V\) mediante la fórmula general \cite{kinsler2000}:
+
+\begin{equation}
+E_{\text{total}} = \iiint_V \varepsilon \, dV.
+\end{equation}
+
+\noindent Puesto que en el contexto de este proyecto el análisis se concentra en un plano transversal (como el área \(A\) ocupada por el público o el escenario), la magnitud bidimensional que interesa integrar es la energía del campo sonoro proporcional a la presión eficaz al cuadrado, \(p_{\text{rms}}^2(x,y)\), definida en la sección~\ref{sec:campo_total}. La energía acústica total no se evalúa entonces en un solo punto, sino que se obtiene mediante una integral doble sobre dicha área \(A\):
+
+\begin{equation}
+E_{\text{total}}(A) = \iint_A p_{\text{rms}}^2(x,y)\, dA
+= \iint_A E(x,y)\, dA.
+\label{eq:energia_region}
+\end{equation}
+
+\noindent El objetivo específico correspondiente compara, mediante la
+ecuación~\eqref{eq:energia_region}, la energía total obtenida
+\emph{con} interferencia (integrando el campo real \(E(x,y)\) del
+arreglo) frente a la que se obtendría sumando la energía que cada
+fuente aportaría de manera independiente, $\sum_n \iint_R E_n(x,y)\,
+dA$. La diferencia entre ambos resultados es, precisamente, la
+manifestación integrada (sobre una región completa, y no solo en un
+punto) del fenómeno de interferencia descrito en la
+sección~\ref{sec:interferencia}: la energía no se conserva punto a
+punto al sumar dos fuentes, sino que se redistribuye en el espacio.\\
+
+\noindent Al igual que ocurre con los puntos críticos, la
+ecuación~\eqref{eq:energia_region} no siempre admite una antiderivada
+elemental para el integrando \(E(x,y)\), que combina términos \(1/r^2\)
+con productos de funciones trigonométricas. Por ello, BONAIS aproxima
+esta integral mediante \textbf{métodos numéricos de cuadratura}, en
+particular la regla del punto medio, que consiste en subdividir la
+región \(R\) en una malla fina de celdas rectangulares, evaluar \(E(x,y)\)
+en el centro de cada una y sumar esos valores ponderados por el área
+de la celda \cite[sec.~4.4]{burden2011} \cite[sec.~4.8]{burden2011}. Cuanto más fina es la malla, mejor
+aproxima esta suma a la integral exacta de la
+ecuación~\eqref{eq:energia_region}.
+
+
+\noindent La figura~\ref{fig:integral_doble} ilustra este procedimiento sobre la zona del público con una malla de $8\times8$ celdas.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{figuras/mt_integral_doble.png}
+\caption{Regla del punto medio: la zona del público se divide en celdas de área $\Delta A$ y se evalúa la energía en el centro de cada una. BONAIS usa la misma idea con $48\times48$ celdas. Fuente: elaboración propia.}
+\label{fig:integral_doble}
+\end{figure}
+
+\section{Antecedentes: arreglos direccionales de subwoofers}
+
+\noindent Las secciones anteriores presentaron el sustento físico y matemático
+de la interferencia entre fuentes puntuales, y cómo esa interferencia
+se analiza con las herramientas del Cálculo III. Esta última sección
+cierra el capítulo describiendo, como \emph{antecedente} del proyecto,
+el estado actual de la técnica de ingeniería que ya aplica ese
+principio en el sonido en vivo: los \emph{arreglos direccionales de
+subwoofers}. A diferencia de los temas anteriores, este conocimiento
+no proviene de un libro de texto, sino de la práctica documentada de
+la industria del audio profesional, por lo que las fuentes consultadas
+corresponden a publicaciones técnicas especializadas del gremio.\\
+
+\noindent Como ya se estableció, un subwoofer aislado radia el sonido de manera
+casi omnidireccional, por ser una fuente acústicamente compacta frente
+a su longitud de onda. En un evento en vivo esto genera dos problemas
+prácticos: el sonido grave se acumula en el escenario, donde puede
+saturar los micrófonos y favorecer la retroalimentación, y la
+cobertura de graves entre el público resulta desigual
+\cite{fohonline_cardioid}. Como no es posible construir un subwoofer
+físicamente direccional a esas frecuencias, la industria resuelve el
+problema combinando varias unidades con una separación y un retardo
+específicos entre ellas (exactamente los parámetros \(d\) y \(\tau\) de
+la ecuación~\eqref{eq:fase_neta}), de modo que sus campos de presión
+interfieran constructivamente hacia el público y destructivamente
+hacia atrás \cite{eaw_cardioid}.\\
+
+\noindent El principio detrás de esta técnica, conocida como arreglo de
+\emph{gradiente} o, en su forma más simple, arreglo \emph{cardioide},
+no es nuevo: su formulación se remonta al trabajo de Harry F. Olson
+sobre micrófonos y altavoces de gradiente de presión, patentado a
+comienzos de la década de 1970, en el que ya se establecía que
+invertir la polaridad de una fuente y retardarla respecto a otra
+produce un patrón de radiación direccional en bajas frecuencias
+\cite{audioxpress_olson}. Lo que ha cambiado desde entonces es la
+disponibilidad de procesadores digitales que permiten ajustar ese
+retardo con precisión de fracciones de milisegundo, lo cual ha hecho
+de los arreglos cardioides una práctica común en el sonido en vivo
+contemporáneo \cite{fohonline_cardioid,eaw_cardioid}.\\
+
+\noindent En la configuración más simple de dos subwoofers, la unidad trasera se
+invierte en polaridad y se retarda un tiempo igual al que tarda el
+sonido en recorrer la separación entre ambas, mientras que la
+separación misma se fija, en la práctica, en una cuarta parte de la
+longitud de onda de la frecuencia de interés \cite{eaw_cardioid}. Los
+fabricantes reportan, para arreglos de este tipo, atenuaciones típicas
+de hasta 15~dB hacia la parte trasera del arreglo respecto al frente
+\cite{fohonline_cardioid}.
+
+\noindent La figura~\ref{fig:polar} compara el patrón de radiación de dos subwoofers en fase con el de un arreglo cardioide de este tipo.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{figuras/mt_polar.png}
+\caption{Patrón polar a 80~Hz. Con dos subwoofers en fase el grave sale casi igual hacia todos lados; con el arreglo cardioide se concentra hacia el público y se anula hacia el escenario. Fuente: elaboración propia.}
+\label{fig:polar}
+\end{figure}
+
+\noindent Este antecedente es, en últimas, el que
+motiva la pregunta central del proyecto: determinar, a partir del
+modelo matemático desarrollado en este capítulo, la separación y el
+retardo que maximizan dicha atenuación para una frecuencia dada, y qué
+tan sensible es ese resultado a los errores de ajuste que ocurren en
+la práctica.

@@ -106,23 +106,25 @@ export default React.memo(function ControlPanel() {
           onChange={(e) => handleFrequencySlider(e.target.value)}
           className="slider-custom"
         />
-        <div className="flex justify-between text-[10px] text-muted tabular-nums">
-          <span>20 Hz</span>
-          <div className="flex gap-1.5">
+        <div className="flex items-center justify-between pt-0.5">
+          <span className="text-[10.5px] text-muted tabular-nums">Presets sub</span>
+          <div className="flex items-center gap-1">
             {[50, 80, 100].map((fPreset) => (
               <button
                 key={fPreset}
                 type="button"
                 onClick={() => handleFrequencyInput(fPreset)}
-                className={`px-1.5 py-0.2 rounded-full transition-colors ${
-                  state.frequency === fPreset ? 'text-purple-dark dark:text-purple-light font-medium' : 'hover:text-text'
+                className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-medium transition-all ${
+                  state.frequency === fPreset
+                    ? 'bg-[#7C3AED]/20 text-purple-dark dark:text-purple-light border border-[#7C3AED]/40 font-semibold'
+                    : 'sim-card text-muted hover:text-text'
                 }`}
+                title={`Fijar frecuencia a ${fPreset} Hz${fPreset === 80 ? ' (diseño de referencia del proyecto)' : ''}`}
               >
-                {fPreset}
+                {fPreset} Hz
               </button>
             ))}
           </div>
-          <span>200 Hz</span>
         </div>
       </div>
 
