@@ -110,7 +110,9 @@ export function integrateRectangularRegion({
 
 /**
  * Realiza la integración en modo corona circular (coordenadas polares) para validar
- * el teorema analítico de redistribución de energía: ρ ≈ 1 + J0(kd).
+ * la fórmula exacta de campo lejano (dos fuentes, cualquier polaridad, ganancia y retardo):
+ *   ρ ≈ 1 + 2·Re(c₁·c̄₂)·J0(kd) / (g₁² + g₂²)
+ * En fase (c₁ = c₂ = 1) se reduce a 1 + J0(kd); en el cardioide con τ = d/c, a 1 − cos(kd)·J0(kd).
  * ∬ E r dr dθ con r ∈ [r1, r2], θ ∈ [0, 2π].
  *
  * @param {Object} options
@@ -172,8 +174,8 @@ export function integratePolarCorona({
   }
 
   const rho = sumSum > 0 ? sumInt / sumSum : 1.0;
-  const rhoTheoretical = 1.0 + besselJ0(k * d);
-  const errorPercent = Math.abs((rho - rhoTheoretical) / rhoTheoretical) * 100;
+  const rhoTheoretical = theoreticalCoronaRho(precomputedSources, k, d);
+  const errorPercent = Math.abs((rho - rhoTheoretical) / Math.max(Math.abs(rhoTheoretical), 1e-6)) * 100;
 
   return {
     I_int: sumInt,
@@ -183,4 +185,24 @@ export function integratePolarCorona({
     errorPercent,
     matchesTheory: Math.abs(rho - rhoTheoretical) <= 0.015,
   };
+}
+
+/**
+ * Valor exacto de ρ en una corona lejana para dos fuentes con coeficientes c₁ (trasera) y c₂ (frontal):
+ * ρ = 1 + 2·Re(c₁·c̄₂)·J0(kd) / (|c₁|² + |c₂|²).
+ * Se obtiene integrando en polares el término cruzado de |P|², con r₁ − r₂ ≈ d·cos θ y
+ * ∫₀^{2π} e^{−j·kd·cos θ} dθ = 2π·J0(kd).
+ *
+ * @param {Array<{cRe: number, cIm: number}>} precomputedSources - [trasera, frontal]
+ * @param {number} k - Número de onda [rad/m]
+ * @param {number} d - Separación [m]
+ * @returns {number}
+ */
+export function theoreticalCoronaRho(precomputedSources, k, d) {
+  if (!precomputedSources || precomputedSources.length !== 2) return 1.0 + besselJ0(k * d);
+  const [s1, s2] = precomputedSources;
+  const cross = s1.cRe * s2.cRe + s1.cIm * s2.cIm; // Re(c₁·c̄₂)
+  const g2 = s1.cRe * s1.cRe + s1.cIm * s1.cIm + s2.cRe * s2.cRe + s2.cIm * s2.cIm;
+  if (g2 <= 0) return 1.0;
+  return 1.0 + (2 * cross * besselJ0(k * d)) / g2;
 }

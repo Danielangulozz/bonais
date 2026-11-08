@@ -105,20 +105,32 @@ export function optimizeBandMinMax(f1, f2, speedOfSound) {
  * @param {number} frequency - [Hz]
  * @param {number} speedOfSound - [m/s]
  * @param {number} [rDistance=DEFAULT_REFERENCE_DISTANCE] - [m]
+ * @param {Object} [config] - Configuración real del arreglo. Si se omite, se usa el cardioide ideal
+ *   (g₁ = g₂ = 1, s₁ = −1, s₂ = +1, τ₂ = 0), que es el caso del objetivo general.
+ * @param {number} [config.gainFront=1] @param {number} [config.gainRear=1]
+ * @param {number} [config.polarityFront=1] @param {number} [config.polarityRear=-1]
+ * @param {number} [config.delayFront=0] - Retardo de la fuente frontal [s]
  * @returns {number} Atenuación A_R en decibelios [dB]
  */
-export function evaluateARObjective(d, tau, frequency, speedOfSound, rDistance = DEFAULT_REFERENCE_DISTANCE) {
+export function evaluateARObjective(d, tau, frequency, speedOfSound, rDistance = DEFAULT_REFERENCE_DISTANCE, config = {}) {
   const omega = calculateOmega(frequency);
   const k = calculateWavenumber(frequency, speedOfSound);
+  const {
+    gainFront = 1.0,
+    gainRear = 1.0,
+    polarityFront = 1,
+    polarityRear = -1,
+    delayFront = 0,
+  } = config;
 
   const sources = createTwoSubSources({
     separation: d,
     delayRear: tau,
-    delayFront: 0,
-    gainRear: 1.0,
-    gainFront: 1.0,
-    polarityRear: -1,
-    polarityFront: 1,
+    delayFront,
+    gainRear,
+    gainFront,
+    polarityRear,
+    polarityFront,
   });
 
   const precomp = precomputeSourceCoefficients(sources, omega);

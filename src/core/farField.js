@@ -59,22 +59,6 @@ export function calculateFarFieldPressure(theta, {
 }
 
 /**
- * Calcula la magnitud de presión en campo lejano para un arreglo cardioide ideal (g1=g2=1, s1=-1, s2=+1, τ2=0).
- * |P_far(θ)| = 2 * |sin((k * d * cosθ + ω * τ) / 2)|
- *
- * @param {number} theta - Ángulo en radianes [rad]
- * @param {number} d - Separación física [m]
- * @param {number} tau - Retardo de la fuente trasera [s]
- * @param {number} k - Número de onda [rad/m]
- * @param {number} omega - Frecuencia angular [rad/s]
- * @returns {number} Magnitud relativa |P_far|
- */
-export function cardioidFarFieldMagnitude(theta, d, tau, k, omega) {
-  const arg = (k * d * Math.cos(theta) + omega * tau) / 2;
-  return 2 * Math.abs(Math.sin(arg));
-}
-
-/**
  * Calcula la atenuación frente/atrás en campo lejano A_ff en decibelios:
  * A_ff = 20 * log10( |P_far(0)| / |P_far(π)| )
  *

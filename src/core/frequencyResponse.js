@@ -50,7 +50,10 @@ export function sweepFrequencyResponse({
     const omega = calculateOmega(f);
     const k = calculateWavenumber(f, speedOfSound);
 
-    const ar = evaluateARObjective(d, delayRear, f, speedOfSound, rDistance);
+    // A_R(f) con la configuración real del arreglo (polaridades, ganancias y retardos actuales)
+    const ar = evaluateARObjective(d, delayRear, f, speedOfSound, rDistance, {
+      gainFront, gainRear, polarityFront, polarityRear, delayFront,
+    });
 
     const ff = calculateFarFieldAttenuation({
       d,

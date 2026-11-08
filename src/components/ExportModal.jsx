@@ -54,6 +54,13 @@ export default function ExportModal() {
       frequency: state.frequency,
       speedOfSound: derived.c,
       rDistance: state.referenceDistance,
+      config: {
+        gainFront: derived.gainFrontLinear,
+        gainRear: derived.gainRearLinear,
+        polarityFront: state.polarityFront,
+        polarityRear: state.polarityRear,
+        delayFront: state.delayFront,
+      },
     });
     sens.tauPerturbations.forEach((p) => {
       lines.push(`${nfComma(p.deltaTauMs, 2)};${nfComma(p.phaseErrorDeg, 1)};${nfComma(p.perturbedAR, 2)};${nfComma(p.dropDB, 2)}`);

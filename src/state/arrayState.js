@@ -47,7 +47,6 @@ export const INITIAL_STATE = {
   preset: 'cardioid',
   theme: 'dark',
   activeTab: 'calculus',
-  selectedTool: 'point',
   inspectedPoint: { x: 5.0, y: 0.0 },
   audienceRegion: { ...DEFAULT_AUDIENCE_REGION },
   stageRegion: { ...DEFAULT_STAGE_REGION },
@@ -60,7 +59,6 @@ export const INITIAL_STATE = {
     regions: true,
     integrationMesh: false,
   },
-  rightPanel: 'model', // 'model' | 'results'
   activePage: 'landing', // 'landing' | 'simulator'
   viewMode: 'map2d', // 'map2d' | 'polar' | 'dual' | 'contours'
   layoutMode: 'studio', // 'studio' | 'fullscreen'
@@ -68,7 +66,6 @@ export const INITIAL_STATE = {
   compareMode: false,
   showTheoryModal: false,
   showExportModal: false,
-  showExperimentModal: false,
 };
 
 function arrayReducer(state, action) {
@@ -232,17 +229,11 @@ function arrayReducer(state, action) {
       };
     }
 
-    case 'SET_RIGHT_PANEL':
-      return { ...state, rightPanel: action.payload };
-
     case 'SET_VIEW_MODE':
       return { ...state, viewMode: action.payload };
 
     case 'SET_ACTIVE_PAGE':
       return { ...state, activePage: action.payload };
-
-    case 'SET_EXPERIMENT_MODAL':
-      return { ...state, showExperimentModal: action.payload };
 
     case 'SET_LAYOUT_MODE':
       return { ...state, layoutMode: action.payload };

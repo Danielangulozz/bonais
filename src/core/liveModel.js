@@ -17,7 +17,7 @@ import { calculatePointField, createTwoSubSources, precomputeSourceCoefficients 
 import { calculateAR } from './metrics.js';
 import { calculateAnalyticalGradient } from './calculus/gradient.js';
 import { calculateHessian } from './calculus/criticalPoints.js';
-import { integrateRectangularRegion } from './calculus/integrals.js';
+import { integrateRectangularRegion, theoreticalCoronaRho } from './calculus/integrals.js';
 import { besselJ0 } from './calculus/bessel.js';
 import { R_MIN } from './constants.js';
 
@@ -76,18 +76,6 @@ export function farFieldPhasor(theta, precomputedSources, k) {
     im += s.cRe * sa + s.cIm * ca;
   }
   return { re, im, mag: Math.hypot(re, im) };
-}
-
-/**
- * Cociente teórico de redistribución de energía sobre una corona lejana completa:
- * ρ = 1 + 2·Re(c₁ c̄₂)·J₀(kd) / (g₁² + g₂²)
- * (en fase y ganancias iguales → 1 + J₀(kd); cardioide con τ = d/c → 1 − cos(kd)·J₀(kd)).
- */
-export function theoreticalCoronaRho(precomputedSources, k, d) {
-  const [a, b] = precomputedSources;
-  const reC1C2 = a.cRe * b.cRe + a.cIm * b.cIm; // Re(c1 · conj(c2))
-  const g2 = a.gain * a.gain + b.gain * b.gain;
-  return 1 + (2 * reC1C2 * besselJ0(k * d)) / Math.max(g2, 1e-12);
 }
 
 /** Muestras del integrando E(x, y) en una malla de visualización n×n (punto medio). */

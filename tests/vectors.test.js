@@ -13,6 +13,7 @@ import {
 import { calculateAR, calculateQPE } from '../src/core/metrics.js';
 import { createTwoSubSources, precomputeSourceCoefficients, calculatePointField } from '../src/core/field.js';
 import { besselJ0 } from '../src/core/calculus/bessel.js';
+import { sweepFrequencyResponse } from '../src/core/frequencyResponse.js';
 import { integratePolarCorona } from '../src/core/calculus/integrals.js';
 import { optimizeBandMinMax, optimizeSingleFrequency } from '../src/core/optimize.js';
 import {
@@ -274,5 +275,31 @@ describe('Vectores de prueba obligatorios (Sección 4.12)', () => {
       testCount++;
     }
     expect(testCount).toBeGreaterThan(40);
+  });
+
+  it('11. Corona 3–100 m, cardioide 80 Hz con τ = d/c: reproduce 1 − cos(kd)·J0(kd) (±0.015)', () => {
+    const c = 343.2;
+    const f = 80;
+    const omega = calculateOmega(f);
+    const k = calculateWavenumber(f, c);
+    for (const d of [0.5, 1.0, 1.4, 2.0]) {
+      const src = precomputeSourceCoefficients(
+        createTwoSubSources({ separation: d, delayRear: d / c, polarityRear: -1, polarityFront: 1 }),
+        omega
+      );
+      const corona = integratePolarCorona({ r1: 3, r2: 100, precomputedSources: src, k, d, wavelength: c / f });
+      const expected = 1 - Math.cos(k * d) * besselJ0(k * d);
+      expect(Math.abs(corona.rhoTheoretical - expected)).toBeLessThan(1e-9);
+      expect(Math.abs(corona.rho - expected)).toBeLessThanOrEqual(0.015);
+    }
+  });
+
+  it('12. Respuesta en frecuencia en fase (τ = 0, s₁ = s₂ = +1): A_R(f) = 0 dB en toda la banda', () => {
+    const data = sweepFrequencyResponse({
+      d: 1.07, tau: 0, speedOfSound: 343.2,
+      polarityRear: 1, polarityFront: 1, delayRear: 0,
+      fMin: 40, fMax: 100, numPoints: 13,
+    });
+    data.forEach((p) => expect(Math.abs(p.arDB)).toBeLessThan(0.05));
   });
 });

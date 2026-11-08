@@ -269,7 +269,7 @@ export default function FrequencyPanel() {
           </div>
 
           <span className="text-[11px] text-muted text-center">
-            Escala polar de 0 dB (borde exterior) a −30 dB (centro). Nulo trasero evidente a 180°.
+            Escala polar de 0 dB (borde exterior) a −30 dB (centro). {derived.fastMetrics.affDB >= 20 ? 'Nulo trasero evidente a 180°.' : 'Sin nulo trasero apreciable: el grave sale casi igual hacia atrás.'}
           </span>
         </div>
       </div>

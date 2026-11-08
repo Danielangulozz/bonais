@@ -399,19 +399,19 @@ export default function CalculusPanel() {
             <div className="p-3 bg-accent/10 border border-accent/30 rounded flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
                 <span className="font-bold text-accent text-sm block">
-                  Teorema Polar de Conservación y Redistribución: ρ ≈ 1 + J₀(kd)
+                  Validación exacta en corona: ρ = 1 + 2·Re(c₁c̄₂)·J₀(kd) / (g₁² + g₂²)
                 </span>
                 <p className="text-[11px] text-muted mt-0.5">
-                  Al integrar la energía en una corona completa lejana [3m, 100m] en coordenadas polares, la interferencia no crea ni destruye energía global, sino que la modula según la función de Bessel.
+                  En una corona lejana [3 m, 100 m] la integral doble en polares tiene solución cerrada con la función de Bessel J₀. En fase se reduce a 1 + J₀(kd) (ρ &gt; 1: las cajas cercanas suman energía); en el cardioide con τ = d/c, a 1 − cos(kd)·J₀(kd), que vale 1 en d = λ/4. Si la cuadratura numérica coincide con este valor, la integral del simulador es correcta.
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <div className="text-xs text-muted">ρ Numérico polar: <strong className="text-text">{nf3.format(integralResult.rho)}</strong></div>
-                  <div className="text-xs text-muted">1 + J₀(kd) teórico: <strong className="text-accent">{nf3.format(integralResult.rhoTheoretical)}</strong></div>
+                  <div className="text-xs text-muted">ρ numérico (polar): <strong className="text-text">{nf3.format(integralResult.rho)}</strong></div>
+                  <div className="text-xs text-muted">ρ teórico: <strong className="text-accent">{nf3.format(integralResult.rhoTheoretical)}</strong></div>
                 </div>
-                <span className="rounded bg-ok text-bg px-3 py-1 font-bold text-xs">
-                  Coincide (Error {integralResult.errorPercent.toFixed(2)}%)
+                <span className={`rounded px-3 py-1 font-bold text-xs ${integralResult.matchesTheory ? 'bg-ok text-bg' : 'bg-red-light/70 text-white'}`}>
+                  {integralResult.matchesTheory ? 'Coincide' : 'No coincide'} (Error {integralResult.errorPercent.toFixed(2)}%)
                 </span>
               </div>
             </div>

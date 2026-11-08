@@ -13,7 +13,6 @@ import TheoryPanel from './components/panels/TheoryPanel.jsx';
 import TheoryModal from './components/TheoryModal.jsx';
 import CompareModal from './components/CompareModal.jsx';
 import ExportModal from './components/ExportModal.jsx';
-import ExperimentLabModal from './components/ExperimentLabModal.jsx';
 import LiveModelPanel from './components/LiveModelPanel.jsx';
 import { Calculator, Sparkles, Activity, Radio, BookOpen, ChevronDown } from 'lucide-react';
 
@@ -159,7 +158,6 @@ function AppContent() {
       {state.activePage === 'landing' ? <LandingPage /> : <MainLayout />}
 
       {/* Modales globales accesibles en cualquier vista */}
-      <ExperimentLabModal />
       <TheoryModal />
       <CompareModal />
       <ExportModal />
