@@ -246,7 +246,7 @@ export default React.memo(function PolarPlot({ interactive = true }) {
   }, [interactive, polarData]);
 
   return (
-    <div ref={containerRef} className="w-full h-full flex flex-col relative overflow-hidden select-none bg-white dark:bg-black">
+    <div ref={containerRef} className="w-full h-full flex flex-col relative overflow-hidden select-none bg-white dark:bg-[#1A1B1E]">
       {/* Floating HUD Top */}
       <div className="absolute top-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
         <div className="landing-glass rounded-full px-3.5 py-1.5 flex items-center gap-2 text-[11px] pointer-events-auto">

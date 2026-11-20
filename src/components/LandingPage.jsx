@@ -165,7 +165,7 @@ export default function LandingPage() {
 
       {/* ═══ Hero: el campo real del cardioide, animado ═══ */}
       <section className={`relative flex flex-col min-h-[100svh] lg:h-[100svh] lg:min-h-[620px] w-full overflow-hidden transition-colors duration-300 ${
-        isDark ? 'bg-black text-white' : 'bg-white text-[#0B0712]'
+        isDark ? 'bg-[#1A1B1E] text-[#F4F5F7]' : 'bg-white text-[#0B0712]'
       }`}>
         {/* Zona sensible: solo sobre el gráfico, para que pasar por el texto no lo active */}
         <div className="hero-hit absolute inset-0 lg:left-[52%] z-[5]" aria-hidden="true" />
@@ -179,10 +179,10 @@ export default function LandingPage() {
         />
         {/* Velos: el texto vive en la zona silenciosa y la ficha sobre un fondo limpio */}
         <div className={`absolute inset-x-0 top-[280px] bottom-0 lg:top-auto lg:h-1/3 pointer-events-none bg-gradient-to-t ${
-          isDark ? 'from-black via-black/90 lg:via-black/40 to-transparent' : 'from-white via-white/90 lg:via-white/40 to-transparent'
+          isDark ? 'from-[#1A1B1E] via-[#1A1B1E]/90 lg:via-[#1A1B1E]/45 to-transparent' : 'from-white via-white/90 lg:via-white/40 to-transparent'
         }`} />
         <div className={`absolute inset-y-0 left-0 w-3/5 hidden lg:block pointer-events-none bg-gradient-to-r ${
-          isDark ? 'from-black/85 via-black/50 to-transparent' : 'from-white/90 via-white/60 to-transparent'
+          isDark ? 'from-[#1A1B1E]/90 via-[#1A1B1E]/55 to-transparent' : 'from-white/90 via-white/60 to-transparent'
         }`} />
 
         <div className="relative z-10 w-full lg:h-full max-w-6xl mx-auto px-5 sm:px-8 flex flex-col lg:justify-center pt-[335px] pb-8 lg:pb-[130px] lg:pt-16 pointer-events-none">

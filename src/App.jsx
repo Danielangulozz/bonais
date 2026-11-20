@@ -13,7 +13,6 @@ import TheoryPanel from './components/panels/TheoryPanel.jsx';
 import TheoryModal from './components/TheoryModal.jsx';
 import CompareModal from './components/CompareModal.jsx';
 import ExportModal from './components/ExportModal.jsx';
-import ExperimentLabModal from './components/ExperimentLabModal.jsx';
 import LiveModelPanel from './components/LiveModelPanel.jsx';
 import { Calculator, Sparkles, Activity, Radio, BookOpen, ChevronDown } from 'lucide-react';
 
@@ -65,7 +64,7 @@ function MainLayout() {
         )}
 
         {/* CENTER COLUMN: Full-bleed Acoustic Canvas */}
-        <main className="flex-1 flex flex-col rounded-3xl border border-border shadow-2xl overflow-hidden relative min-w-0 bg-white dark:bg-black">
+        <main className="flex-1 flex flex-col rounded-3xl border border-border shadow-2xl overflow-hidden relative min-w-0 bg-white dark:bg-[#1A1B1E]">
           {state.viewMode === 'polar' ? (
             <PolarPlot />
           ) : state.viewMode === 'dual' ? (
@@ -159,7 +158,6 @@ function AppContent() {
       {state.activePage === 'landing' ? <LandingPage /> : <MainLayout />}
 
       {/* Modales globales accesibles en cualquier vista */}
-      <ExperimentLabModal />
       <TheoryModal />
       <CompareModal />
       <ExportModal />

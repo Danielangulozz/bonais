@@ -27,8 +27,16 @@ export default function SensitivityPanel() {
       frequency: state.frequency,
       speedOfSound: derived.c,
       rDistance: state.referenceDistance,
+      config: {
+        gainFront: derived.gainFrontLinear,
+        gainRear: derived.gainRearLinear,
+        polarityFront: state.polarityFront,
+        polarityRear: state.polarityRear,
+        delayFront: state.delayFront,
+      },
     });
-  }, [state.separation, state.delayRear, state.frequency, derived.c, state.referenceDistance]);
+  }, [state.separation, state.delayRear, state.frequency, derived.c, state.referenceDistance,
+      derived.gainFrontLinear, derived.gainRearLinear, state.polarityFront, state.polarityRear, state.delayFront]);
 
   // Ventana de tolerancia para AR >= 10 dB
   const tolWindows = useMemo(() => {
@@ -39,8 +47,16 @@ export default function SensitivityPanel() {
       speedOfSound: derived.c,
       thresholdDB: 10.0,
       rDistance: state.referenceDistance,
+      config: {
+        gainFront: derived.gainFrontLinear,
+        gainRear: derived.gainRearLinear,
+        polarityFront: state.polarityFront,
+        polarityRear: state.polarityRear,
+        delayFront: state.delayFront,
+      },
     });
-  }, [state.separation, state.delayRear, state.frequency, derived.c, state.referenceDistance]);
+  }, [state.separation, state.delayRear, state.frequency, derived.c, state.referenceDistance,
+      derived.gainFrontLinear, derived.gainRearLinear, state.polarityFront, state.polarityRear, state.delayFront]);
 
   // Encontrar perturbación a +0.5 ms para la frase automática
   const p05 = sensData.tauPerturbations.find((p) => Math.abs(p.deltaTauMs - 0.5) < 0.01);

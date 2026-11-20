@@ -82,7 +82,7 @@ export default function TheoryPanel() {
             <strong>Clasificación con la matriz Hessiana:</strong> Los puntos donde <KaTeXMath math="\nabla E = 0" /> se clasifican mediante el determinante <KaTeXMath math="D = E_{xx} E_{yy} - E_{xy}^2" />. Si <KaTeXMath math="D > 0" /> y <KaTeXMath math="E_{xx} > 0" /> es un casi-nulo (mínimo local); si <KaTeXMath math="D < 0" /> es un punto de silla hiperbólico.
           </li>
           <li>
-            <strong>Teorema de redistribución de energía:</strong> Al integrar en una corona circular lejana <KaTeXMath math="[r_1, r_2] \times [0, 2\pi]" />, el cociente entre la energía real y la suma de fuentes incoherentes converge analíticamente a <KaTeXMath math="\rho \approx 1 + J_0(kd)" />, donde <KaTeXMath math="J_0" /> es la función de Bessel de orden cero.
+            <strong>Teorema de redistribución de energía:</strong> Al integrar en una corona circular lejana <KaTeXMath math="[r_1, r_2] \times [0, 2\pi]" />, el cociente entre la energía real y la suma de fuentes incoherentes converge analíticamente a <KaTeXMath math="\rho \approx 1 + \dfrac{2\,\mathrm{Re}(c_1\bar c_2)}{g_1^2+g_2^2}\,J_0(kd)" />, donde <KaTeXMath math="J_0" /> es la función de Bessel de orden cero. En fase vale <KaTeXMath math="1 + J_0(kd)" />; en el cardioide con <KaTeXMath math="\tau = d/c" />, <KaTeXMath math="1 - \cos(kd)\,J_0(kd)" />.
           </li>
         </ul>
       </section>

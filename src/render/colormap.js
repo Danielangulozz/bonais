@@ -26,12 +26,6 @@ const MAX_DB_DEFAULT = 12;
  */
 export const MAGMA_UINT32_TABLE = new Uint32Array(PALETTE_SIZE);
 
-/**
- * Tabla precomputada de colores CSS [r, g, b]
- * @type {Array<[number, number, number]>}
- */
-export const MAGMA_RGB_TABLE = new Array(PALETTE_SIZE);
-
 // Inicializar tablas precalculadas
 (function initColormapTables() {
   for (let i = 0; i < PALETTE_SIZE; i++) {
@@ -54,7 +48,6 @@ export const MAGMA_RGB_TABLE = new Array(PALETTE_SIZE);
     const g = Math.round(s0.g + localT * (s1.g - s0.g));
     const b = Math.round(s0.b + localT * (s1.b - s0.b));
 
-    MAGMA_RGB_TABLE[i] = [r, g, b];
 
     // En arquitecturas little-endian (x86/ARM), Uint32Array escribe bytes en memoria: [R, G, B, A]
     // Por ende: (A << 24) | (B << 16) | (G << 8) | R
@@ -75,27 +68,4 @@ export function getPaletteIndex(levelDB, minDB = MIN_DB_DEFAULT, maxDB = MAX_DB_
   if (levelDB >= maxDB) return PALETTE_SIZE - 1;
   const norm = (levelDB - minDB) / (maxDB - minDB);
   return (norm * (PALETTE_SIZE - 1)) | 0;
-}
-
-/**
- * Obtiene el color Uint32 listo para asignar a ImageData.data32.
- * @param {number} levelDB
- * @param {number} [minDB]
- * @param {number} [maxDB]
- * @returns {number}
- */
-export function getMagmaUint32(levelDB, minDB = MIN_DB_DEFAULT, maxDB = MAX_DB_DEFAULT) {
-  return MAGMA_UINT32_TABLE[getPaletteIndex(levelDB, minDB, maxDB)];
-}
-
-/**
- * Obtiene el color en formato CSS `rgb(r, g, b)`.
- * @param {number} levelDB
- * @param {number} [minDB]
- * @param {number} [maxDB]
- * @returns {string}
- */
-export function getMagmaCSS(levelDB, minDB = MIN_DB_DEFAULT, maxDB = MAX_DB_DEFAULT) {
-  const [r, g, b] = MAGMA_RGB_TABLE[getPaletteIndex(levelDB, minDB, maxDB)];
-  return `rgb(${r}, ${g}, ${b})`;
 }

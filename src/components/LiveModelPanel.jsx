@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useDeferredValue, useRef, useEffect } from 'react';
-import { useArrayState, useArrayDerived } from '../state/arrayState.js';
+import { useArrayState, useArrayDispatch, useArrayDerived } from '../state/arrayState.js';
 import { computeLiveModel } from '../core/liveModel.js';
 import { MAGMA_UINT32_TABLE, getPaletteIndex } from '../render/colormap.js';
 import KaTeXMath from './KaTeXMath.jsx';
-import { ChevronDown, AlertTriangle } from 'lucide-react';
+import { ChevronDown, AlertTriangle, Crosshair } from 'lucide-react';
 
 /* ───────── Formato numérico (coma decimal, es-CO) ───────── */
 const fixed = (v, dp) => {
@@ -234,7 +234,18 @@ function RiemannGrid({ grid, region, label, sublabel, tone }) {
 /* ───────── Panel principal unificado (Telemetría + Ecuaciones Limpias) ───────── */
 export default function LiveModelPanel() {
   const state = useArrayState();
+  const dispatch = useArrayDispatch();
   const derived = useArrayDerived();
+
+  const updatePointCoord = (axis, raw) => {
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return;
+    const clamped = Math.max(-100, Math.min(100, n));
+    dispatch({
+      type: 'SET_INSPECTED_POINT',
+      payload: { ...state.inspectedPoint, [axis]: clamped },
+    });
+  };
 
   // Los cálculos pesados siguen al estado sin bloquear los deslizadores.
   const s = useDeferredValue(state);
@@ -400,6 +411,39 @@ export default function LiveModelPanel() {
         open={open.sup}
         onToggle={() => toggle('sup')}
       >
+        <div className="sim-card rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-[10.5px] text-muted flex-shrink-0">
+            <Crosshair className="h-3 w-3 text-purple-dark dark:text-purple-light" />
+            <span>Punto P</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-[10.5px] text-muted">
+              <span>x</span>
+              <input
+                type="number"
+                step="0.5"
+                min="-100"
+                max="100"
+                value={Math.round(state.inspectedPoint.x * 100) / 100}
+                onChange={(e) => updatePointCoord('x', e.target.value)}
+                className="w-14 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] border border-border px-1.5 py-0.5 text-right text-[11px] font-medium tabular-nums text-text focus:outline-none focus:border-purple/50"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-[10.5px] text-muted">
+              <span>y</span>
+              <input
+                type="number"
+                step="0.5"
+                min="-100"
+                max="100"
+                value={Math.round(state.inspectedPoint.y * 100) / 100}
+                onChange={(e) => updatePointCoord('y', e.target.value)}
+                className="w-14 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] border border-border px-1.5 py-0.5 text-right text-[11px] font-medium tabular-nums text-text focus:outline-none focus:border-purple/50"
+              />
+            </label>
+            <span className="text-[10px] text-muted">m</span>
+          </div>
+        </div>
         <FormulaBox>
           <Eq math={'P_{\\text{total}}(x,y) = \\sum_{n=1}^{2} \\frac{A_n}{r_n}\\,e^{-j(k r_n + \\phi_n)}, \\qquad \\phi_n = \\omega\\tau_n + \\theta_n'} />
         </FormulaBox>
@@ -433,7 +477,7 @@ export default function LiveModelPanel() {
           />
         </div>
         <PhasorDiagram phasors={sp.phasors} P={sp.P} />
-        <Note>Haz clic en cualquier punto del mapa 2D para mover el micrófono virtual P(x, y) y ver cómo giran los fasores.</Note>
+        <Note>Haz clic en el mapa 2D para mover P(x, y), o doble clic sobre el punto para escribir sus coordenadas exactas.</Note>
       </Section>
 
       {/* ═══ 03 · 4.3 EL DECIBEL ═══ */}

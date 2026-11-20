@@ -39,10 +39,10 @@ const lerpStops = (stops, t) => {
 /** Tabla de color de presión: compresión en violeta, rarefacción en un rosa muy contenido. */
 function buildPalette(isDark) {
   const crest = isDark
-    ? [[0, [0, 0, 0]], [0.3, [34, 12, 78]], [0.65, [112, 50, 225]], [1, [224, 196, 255]]]
+    ? [[0, [26, 27, 30]], [0.3, [58, 36, 98]], [0.65, [122, 62, 228]], [1, [224, 196, 255]]]
     : [[0, [255, 255, 255]], [0.3, [233, 225, 254]], [0.65, [167, 129, 248]], [1, [91, 33, 182]]];
   const trough = isDark
-    ? [[0, [0, 0, 0]], [1, [88, 14, 48]]]
+    ? [[0, [26, 27, 30]], [1, [104, 34, 62]]]
     : [[0, [255, 255, 255]], [1, [253, 205, 214]]];
   const lut = new Uint32Array(LUT_SIZE);
   for (let i = 0; i < LUT_SIZE; i++) {
