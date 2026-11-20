@@ -91,7 +91,9 @@ export default function OptimizationPanel() {
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     const pStart = toCanvas(dMinMap, dMinMap / derived.c);
-    const pEnd = toCanvas(Math.min(dMaxMap, tauMaxMap * derived.c), tauMaxMap);
+    // Extremo de la recta τ = d/c: se corta en el borde que alcance primero (d máx. o τ máx.)
+    const dEnd = Math.min(dMaxMap, tauMaxMap * derived.c);
+    const pEnd = toCanvas(dEnd, dEnd / derived.c);
     ctx.moveTo(pStart.cx, pStart.cy);
     ctx.lineTo(pEnd.cx, pEnd.cy);
     ctx.stroke();

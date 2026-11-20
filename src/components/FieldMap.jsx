@@ -6,12 +6,26 @@ import { generateContourSegments, drawContoursOnCanvas } from '../render/marchin
 import { calculateAnalyticalGradient } from '../core/calculus/gradient.js';
 import { findCriticalPoints } from '../core/calculus/criticalPoints.js';
 import { calculateInPhaseFirstMinimumAngle } from '../core/farField.js';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Crosshair, Check, X } from 'lucide-react';
 
 const ISOVALUES_3DB = [];
 for (let val = -39; val <= 12; val += 3) {
   ISOVALUES_3DB.push(val);
 }
+
+const parseCoord = (raw) => {
+  const cleaned = String(raw).trim().replace(',', '.');
+  if (!cleaned || cleaned === '-' || cleaned === '+' || cleaned === '.') return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(-100, Math.min(100, n));
+};
+
+const formatEditableCoord = (val) => {
+  if (!Number.isFinite(val)) return '0';
+  const rounded = Math.round(val * 100) / 100;
+  return Object.is(rounded, -0) ? '0' : String(rounded);
+};
 
 export default React.memo(function FieldMap() {
   const state = useArrayState();
@@ -21,8 +35,11 @@ export default React.memo(function FieldMap() {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const offscreenCanvasRef = useRef(null);
+  const xInputRef = useRef(null);
 
   const [hoverInfo, setHoverInfo] = useState(null);
+  const [isHoveringPoint, setIsHoveringPoint] = useState(false);
+  const [pointEditor, setPointEditor] = useState(null);
   const [isSettled, setIsSettled] = useState(true);
   const [canvasSize, setCanvasSize] = useState({ w: 600, h: 450 });
   const [dragState, setDragState] = useState(null);
@@ -30,7 +47,7 @@ export default React.memo(function FieldMap() {
   const lastHoverTimeRef = useRef(0);
 
   const mapSpan = state.mapSpan;
-  const panOffset = state.panOffset || { x: 0, y: 0 };
+  const panOffset = useMemo(() => state.panOffset || { x: 0, y: 0 }, [state.panOffset]);
   const isDark = state.theme === 'dark';
 
   // Strict 1:1 isotropic scale (dx === dy, NO stretching!)
@@ -164,7 +181,7 @@ export default React.memo(function FieldMap() {
     });
 
     if (isContoursMode) {
-      ctx.fillStyle = isDark ? '#000000' : '#FFFFFF';
+      ctx.fillStyle = isDark ? '#1A1B1E' : '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
     } else {
       if (!offscreenCanvasRef.current) {
@@ -374,7 +391,7 @@ export default React.memo(function FieldMap() {
       ctx.textAlign = isFront ? 'left' : 'right';
 
       // Theme-adaptive badge behind text for crisp readability
-      ctx.fillStyle = isDark ? 'rgba(8, 10, 20, 0.85)' : 'rgba(255, 255, 255, 0.92)';
+      ctx.fillStyle = isDark ? 'rgba(26, 27, 30, 0.88)' : 'rgba(255, 255, 255, 0.92)';
       const pad = 3;
       const pillX = isFront ? labelX - pad : labelX - textW - pad;
       ctx.beginPath();
@@ -395,8 +412,19 @@ export default React.memo(function FieldMap() {
     // Inspected point & Gradient vector
     if (state.inspectedPoint) {
       const { cx, cy } = worldToCanvas(state.inspectedPoint.x, state.inspectedPoint.y, width, height);
+      if (isHoveringPoint || pointEditor) {
+        ctx.save();
+        ctx.fillStyle = isDark ? 'rgba(168, 85, 247, 0.22)' : 'rgba(124, 58, 237, 0.16)';
+        ctx.strokeStyle = isDark ? 'rgba(216, 180, 254, 0.75)' : 'rgba(124, 58, 237, 0.65)';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 13, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.strokeStyle = isDark ? '#FFFFFF' : '#0F172A';
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = isHoveringPoint || pointEditor ? 1.8 : 1.4;
       ctx.beginPath();
       ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
       ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy);
@@ -431,7 +459,61 @@ export default React.memo(function FieldMap() {
     state.audienceRegion, state.stageRegion, state.viewMode,
     criticalPoints, asymptoticMin, mapSpan, aspect, isDark,
     xMin, xMax, yMin, yMax, worldToCanvas, canvasSize,
+    isHoveringPoint, pointEditor,
   ]);
+
+  // Focus & select X input when coordinate editor opens
+  const isEditorOpen = Boolean(pointEditor);
+  useEffect(() => {
+    if (!isEditorOpen) return undefined;
+    const id = requestAnimationFrame(() => {
+      xInputRef.current?.focus();
+      xInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isEditorOpen]);
+
+  const openPointEditor = useCallback((targetPoint = state.inspectedPoint, customAnchor = null) => {
+    const pt = targetPoint || { x: 0, y: 0 };
+    const { cx, cy } = customAnchor || worldToCanvas(pt.x, pt.y, canvasSize.w, canvasSize.h);
+    const popW = 248;
+    const popH = 196;
+    // Place next to crosshair, clamped neatly inside viewport away from top/bottom HUD pills
+    let left = cx + 18;
+    if (left + popW > canvasSize.w - 14) {
+      left = cx - popW - 18;
+    }
+    left = Math.max(14, Math.min(canvasSize.w - popW - 14, left));
+    const top = Math.max(54, Math.min(canvasSize.h - popH - 54, cy - 34));
+
+    setPointEditor({
+      xStr: formatEditableCoord(pt.x),
+      yStr: formatEditableCoord(pt.y),
+      left,
+      top,
+    });
+  }, [state.inspectedPoint, worldToCanvas, canvasSize.w, canvasSize.h]);
+
+  const applyManualPoint = useCallback((xVal, yVal) => {
+    if (!Number.isFinite(xVal) || !Number.isFinite(yVal)) return;
+    const x = Math.max(-100, Math.min(100, xVal));
+    const y = Math.max(-100, Math.min(100, yVal));
+    dispatch({ type: 'SET_INSPECTED_POINT', payload: { x, y } });
+    // If the entered point is outside the current viewport, center the camera on it
+    if (x < xMin || x > xMax || y < yMin || y > yMax) {
+      dispatch({ type: 'SET_PAN_OFFSET', payload: { x, y } });
+    }
+    setPointEditor(null);
+  }, [dispatch, xMin, xMax, yMin, yMax]);
+
+  const handleEditorSubmit = useCallback((e) => {
+    e.preventDefault();
+    if (!pointEditor) return;
+    const x = parseCoord(pointEditor.xStr);
+    const y = parseCoord(pointEditor.yStr);
+    if (x === null || y === null) return;
+    applyManualPoint(x, y);
+  }, [pointEditor, applyManualPoint]);
 
   // Pointer interaction: Drag to pan with PointerCapture vs Click to inspect
   const handlePointerDown = useCallback((e) => {
@@ -476,6 +558,7 @@ export default React.memo(function FieldMap() {
         const nextPanY = dragState.startPanY + dyPx * metersPerPixelY;
         dispatch({ type: 'SET_PAN_OFFSET', payload: { x: nextPanX, y: nextPanY } });
         setDragState(prev => prev ? { ...prev, moved: true } : null);
+        if (pointEditor) setPointEditor(null);
         return;
       }
     }
@@ -484,11 +567,17 @@ export default React.memo(function FieldMap() {
     if (now - lastHoverTimeRef.current < 35) return;
     lastHoverTimeRef.current = now;
 
+    if (state.inspectedPoint) {
+      const ptPx = worldToCanvas(state.inspectedPoint.x, state.inspectedPoint.y, rect.width, rect.height);
+      const nearPt = Math.hypot(cx - ptPx.cx, cy - ptPx.cy) <= 16;
+      setIsHoveringPoint((prev) => (prev === nearPt ? prev : nearPt));
+    }
+
     // 100% exact projection to world coordinates using actual bounding rect
     const { wx, wy } = canvasToWorld(cx, cy, rect.width, rect.height);
     const ptField = calculatePointField(wx, wy, derived.precomputedSources, derived.k);
     setHoverInfo({ x: wx, y: wy, levelDB: ptField.levelDB });
-  }, [dragState, canvasToWorld, derived.precomputedSources, derived.k, xMin, xMax, yMin, yMax, dispatch]);
+  }, [dragState, canvasToWorld, worldToCanvas, state.inspectedPoint, derived.precomputedSources, derived.k, xMin, xMax, yMin, yMax, dispatch, pointEditor]);
 
   const handlePointerUp = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -504,11 +593,43 @@ export default React.memo(function FieldMap() {
       const rect = canvas.getBoundingClientRect();
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
-      const { wx, wy } = canvasToWorld(cx, cy, rect.width, rect.height);
-      dispatch({ type: 'SET_INSPECTED_POINT', payload: { x: wx, y: wy } });
+
+      // Avoid jittering the inspected point when clicking directly on its crosshair (e.g., to double-click it)
+      const ptPx = state.inspectedPoint
+        ? worldToCanvas(state.inspectedPoint.x, state.inspectedPoint.y, rect.width, rect.height)
+        : null;
+      const clickedOnCrosshair = ptPx && Math.hypot(cx - ptPx.cx, cy - ptPx.cy) <= 14;
+
+      if (!clickedOnCrosshair) {
+        const { wx, wy } = canvasToWorld(cx, cy, rect.width, rect.height);
+        dispatch({ type: 'SET_INSPECTED_POINT', payload: { x: wx, y: wy } });
+        if (pointEditor) setPointEditor(null);
+      }
     }
     setDragState(null);
-  }, [dragState, canvasToWorld, dispatch]);
+  }, [dragState, canvasToWorld, worldToCanvas, state.inspectedPoint, dispatch, pointEditor]);
+
+  const handleDoubleClick = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    const ptPx = state.inspectedPoint
+      ? worldToCanvas(state.inspectedPoint.x, state.inspectedPoint.y, rect.width, rect.height)
+      : null;
+    const nearCrosshair = ptPx && Math.hypot(cx - ptPx.cx, cy - ptPx.cy) <= 24;
+
+    if (nearCrosshair) {
+      openPointEditor(state.inspectedPoint, ptPx);
+    } else {
+      const { wx, wy } = canvasToWorld(cx, cy, rect.width, rect.height);
+      const nextPt = { x: Math.round(wx * 100) / 100, y: Math.round(wy * 100) / 100 };
+      dispatch({ type: 'SET_INSPECTED_POINT', payload: nextPt });
+      openPointEditor(nextPt, { cx, cy });
+    }
+  }, [state.inspectedPoint, worldToCanvas, canvasToWorld, dispatch, openPointEditor]);
 
   const handlePointerCancel = useCallback(() => {
     setDragState(null);
@@ -526,8 +647,18 @@ export default React.memo(function FieldMap() {
 
   const isReversedWarning = state.polarityRear === 1 && state.delayRear > 0;
 
+  // Live preview of dB level for typed coordinates inside the manual popover
+  const editorPreview = useMemo(() => {
+    if (!pointEditor) return null;
+    const x = parseCoord(pointEditor.xStr);
+    const y = parseCoord(pointEditor.yStr);
+    if (x === null || y === null) return { valid: false };
+    const ptField = calculatePointField(x, y, derived.precomputedSources, derived.k);
+    return { valid: true, x, y, levelDB: ptField.levelDB };
+  }, [pointEditor, derived.precomputedSources, derived.k]);
+
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden select-none bg-white dark:bg-black">
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden select-none bg-white dark:bg-[#1A1B1E]">
       {/* ═══ FULL-BLEED CANVAS VIEWPORT ═══ */}
       <canvas
         ref={canvasRef}
@@ -537,10 +668,115 @@ export default React.memo(function FieldMap() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        onPointerLeave={() => { if (!dragState) setHoverInfo(null); }}
-        className={`absolute inset-0 w-full h-full touch-none ${dragState?.moved ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+        onDoubleClick={handleDoubleClick}
+        onPointerLeave={() => {
+          if (!dragState) {
+            setHoverInfo(null);
+            setIsHoveringPoint(false);
+          }
+        }}
+        className={`absolute inset-0 w-full h-full touch-none ${
+          dragState?.moved
+            ? 'cursor-grabbing'
+            : isHoveringPoint
+              ? 'cursor-pointer'
+              : 'cursor-crosshair'
+        }`}
         aria-label="Mapa interactivo del campo acústico"
       />
+
+      {/* ═══ FLOATING MANUAL COORDINATE EDITOR (Double-click on point/map or HUD pill) ═══ */}
+      {pointEditor && (
+        <form
+          onSubmit={handleEditorSubmit}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setPointEditor(null);
+            }
+          }}
+          style={{ left: pointEditor.left, top: pointEditor.top }}
+          className="absolute z-30 w-[248px] landing-glass rounded-2xl p-3 flex flex-col gap-2.5 animate-fade-in shadow-2xl"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-text">
+              <Crosshair className="h-3.5 w-3.5 text-purple-dark dark:text-purple-light" />
+              <span>Coordenadas de P(x, y)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPointEditor(null)}
+              className="h-5 w-5 grid place-items-center rounded-full text-muted hover:text-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              title="Cerrar (Esc)"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] text-muted">x (m)</span>
+              <input
+                ref={xInputRef}
+                type="text"
+                inputMode="decimal"
+                value={pointEditor.xStr}
+                onChange={(e) => setPointEditor((prev) => prev ? { ...prev, xStr: e.target.value } : null)}
+                className="w-full rounded-xl sim-card px-2.5 py-1.5 text-[12px] font-medium tabular-nums text-text focus:outline-none focus:border-purple/60"
+                placeholder="5,0"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] text-muted">y (m)</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={pointEditor.yStr}
+                onChange={(e) => setPointEditor((prev) => prev ? { ...prev, yStr: e.target.value } : null)}
+                className="w-full rounded-xl sim-card px-2.5 py-1.5 text-[12px] font-medium tabular-nums text-text focus:outline-none focus:border-purple/60"
+                placeholder="0,0"
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10.5px] text-muted tabular-nums">
+              {editorPreview?.valid
+                ? <>Nivel: <strong className="font-semibold text-purple-dark dark:text-[#D8B4FE]">{editorPreview.levelDB.toFixed(1).replace('.', ',')} dB</strong></>
+                : 'Ingresa valores numéricos'}
+            </span>
+            <button
+              type="submit"
+              disabled={!editorPreview?.valid}
+              className="inline-flex items-center gap-1 rounded-full bg-[#7C3AED] hover:bg-[#8B5CF6] disabled:opacity-40 px-3 py-1 text-[11px] font-medium text-white transition-colors"
+            >
+              <Check className="h-3 w-3" />
+              <span>Ubicar</span>
+            </button>
+          </div>
+
+          {/* Accesos rápidos de coordenadas clave */}
+          <div className="pt-1.5 border-t border-border flex items-center gap-1">
+            {[
+              { label: `Púb (${state.referenceDistance}; 0)`, x: state.referenceDistance, y: 0 },
+              { label: `Esc (−${state.referenceDistance}; 0)`, x: -state.referenceDistance, y: 0 },
+              { label: '(0; 0)', x: 0, y: 0 },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => applyManualPoint(preset.x, preset.y)}
+                className="flex-1 rounded-lg sim-card px-1.5 py-1 text-[9.5px] tabular-nums text-muted hover:text-text transition-colors text-center truncate"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </form>
+      )}
 
       {/* ═══ FLOATING HUD TOP: Orientation & Cursor Telemetry ═══ */}
       <div className="absolute top-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
@@ -563,9 +799,19 @@ export default React.memo(function FieldMap() {
               <span className="font-semibold text-purple-dark dark:text-[#D8B4FE]">{hoverInfo.levelDB.toFixed(1).replace('.', ',')} dB</span>
             </div>
           ) : (
-            <div className="landing-glass rounded-full px-3 py-1.5 text-[10.5px] text-muted hidden sm:block">
-              Clic: inspeccionar P(x,y) · Rueda: zoom
-            </div>
+            <button
+              type="button"
+              onClick={() => openPointEditor(state.inspectedPoint)}
+              onDoubleClick={() => openPointEditor(state.inspectedPoint)}
+              className="landing-glass rounded-full px-3 py-1.5 flex items-center gap-1.5 text-[10.5px] text-muted hover:text-text transition-colors tabular-nums"
+              title="Clic aquí o doble clic en el punto para escribir coordenadas (x, y) manualmente"
+            >
+              <Crosshair className="h-3 w-3 text-purple-dark dark:text-purple-light" />
+              <span>
+                P({state.inspectedPoint.x.toFixed(1).replace('.', ',')}; {state.inspectedPoint.y.toFixed(1).replace('.', ',')}) m
+              </span>
+              <span className="hidden xl:inline opacity-65">· Doble clic: editar</span>
+            </button>
           )}
 
           {isReversedWarning && (

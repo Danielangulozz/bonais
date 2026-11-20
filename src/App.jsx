@@ -64,7 +64,7 @@ function MainLayout() {
         )}
 
         {/* CENTER COLUMN: Full-bleed Acoustic Canvas */}
-        <main className="flex-1 flex flex-col rounded-3xl border border-border shadow-2xl overflow-hidden relative min-w-0 bg-white dark:bg-black">
+        <main className="flex-1 flex flex-col rounded-3xl border border-border shadow-2xl overflow-hidden relative min-w-0 bg-white dark:bg-[#1A1B1E]">
           {state.viewMode === 'polar' ? (
             <PolarPlot />
           ) : state.viewMode === 'dual' ? (
